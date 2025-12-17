@@ -118,7 +118,7 @@ CONFIG_VILLES = {
                 "col_adresse": "tranche_horaire",
                 "icone": "bar-chart", "couleur": "gray",
                 "infos_sup": [("frequentation", "👥 Charge"), ("jour_semaine", "📅 Jour")],
-                "no_map": True # Cet indicateur va servir à cacher l'onglet carte
+                "no_map": True
             }
         }
     }
@@ -128,8 +128,49 @@ COLONNES_CP_A_SCANNER = ["cp", "code_postal", "code_post", "zipcode", "commune",
 URL_LOGO = "logo_pulse.png" 
 
 # ==========================================
-# 2. FONCTIONS UTILES
+# 2. FONCTIONS UTILES (Nouvelle fonction GPS Robuste)
 # ==========================================
+
+def recuperer_coordonnees(site):
+    """
+    Fonction 'Détective' qui cherche les coordonnées GPS partout
+    Retourne (lat, lon) ou (None, None)
+    """
+    lat, lon = None, None
+
+    # 1. Structure GeoJSON standard (geometry -> coordinates [lon, lat])
+    geom = site.get("geometry")
+    if geom and isinstance(geom, dict) and geom.get("type") == "Point":
+        coords = geom.get("coordinates")
+        if coords and len(coords) == 2:
+            return coords[1], coords[0] # Attention: GeoJSON est Lon, Lat -> On veut Lat, Lon
+
+    # 2. Colonne 'geo_point_2d' (Paris souvent)
+    geo = site.get("geo_point_2d")
+    if geo and isinstance(geo, dict):
+        return geo.get("lat"), geo.get("lon")
+
+    # 3. Colonne 'lat_lon' (Que faire à Paris)
+    lat_lon = site.get("lat_lon")
+    if lat_lon and isinstance(lat_lon, dict):
+        return lat_lon.get("lat"), lat_lon.get("lon")
+
+    # 4. Colonne 'geolocalisation' (Rennes Parking souvent)
+    geoloc = site.get("geolocalisation")
+    if geoloc and isinstance(geoloc, dict):
+        return geoloc.get("lat"), geoloc.get("lon")
+    
+    # 5. Colonne 'coordonnees' (Rennes Vélo/Bus)
+    coords_rennes = site.get("coordonnees")
+    if coords_rennes and isinstance(coords_rennes, dict):
+        return coords_rennes.get("lat"), coords_rennes.get("lon")
+        
+    # 6. Colonnes explicites 'latitude' / 'longitude'
+    if "latitude" in site and "longitude" in site:
+        try: return float(site["latitude"]), float(site["longitude"])
+        except: pass
+        
+    return None, None
 
 def extraire_cp_intelligent(site_data, col_adresse_config, prefixe_cp="75"):
     cp_trouve = None
@@ -301,17 +342,13 @@ else:
     st.info("Pas de données disponibles pour cette catégorie.")
 
 # --- AFFICHAGE (ONGLETS DYNAMIQUES) ---
-
-# On regarde si on doit afficher l'onglet carte ou pas
 if config_data.get("no_map"):
-    # PAS DE CARTE : On crée seulement 2 onglets
     tab_stats, tab_donnees = st.tabs(["📊 Statistiques", "📋 Données"])
-    tab_carte = None # On force à None pour ne pas l'utiliser
+    tab_carte = None 
 else:
-    # CARTE NORMALE : On crée 3 onglets
     tab_carte, tab_stats, tab_donnees = st.tabs(["🗺️ Carte", "📊 Statistiques", "📋 Données"])
 
-# --- CONTENU ONGLET CARTE (Si il existe) ---
+# --- CONTENU ONGLET CARTE ---
 if tab_carte:
     with tab_carte:
         style_vue = st.radio("Vue :", ["📍 Points", "🔥 Densité"], horizontal=True)
@@ -319,30 +356,8 @@ if tab_carte:
         coords_heatmap = []
         
         for site in resultats_finaux:
-            lat, lon = None, None
-            
-            geo = site.get("geo_point_2d")
-            geom = site.get("geometry")
-            lat_lon_special = site.get("lat_lon")
-            coords_rennes = site.get("coordonnees")
-            geo_rennes_parking = site.get("geo")
-            
-            if geo: 
-                lat, lon = geo.get("lat"), geo.get("lon")
-            elif geom and geom.get("type") == "Point":
-                lon, lat = geom.get("coordinates")
-            elif lat_lon_special and isinstance(lat_lon_special, dict): 
-                lat, lon = lat_lon_special.get("lat"), lat_lon_special.get("lon")
-            elif coords_rennes and isinstance(coords_rennes, dict):
-                lat, lon = coords_rennes.get("lat"), coords_rennes.get("lon")
-            elif geo_rennes_parking:
-                if isinstance(geo_rennes_parking, list) and len(geo_rennes_parking) == 2:
-                    lat, lon = geo_rennes_parking[0], geo_rennes_parking[1]
-                elif isinstance(geo_rennes_parking, str) and "," in geo_rennes_parking:
-                    try:
-                        parts = geo_rennes_parking.split(",")
-                        lat, lon = float(parts[0]), float(parts[1])
-                    except: pass
+            # APPEL DE LA FONCTION ROBUSTE
+            lat, lon = recuperer_coordonnees(site)
 
             if lat and lon:
                 coords_heatmap.append([lat, lon])
@@ -378,6 +393,8 @@ if tab_carte:
             st_folium(m, width=1000, height=600)
         else:
             st.warning("⚠️ Aucune coordonnée GPS trouvée pour ces données.")
+            # Debug silencieux pour voir la structure si besoin
+            # st.write(resultats_finaux[0]) 
 
 # --- CONTENU ONGLET STATS ---
 with tab_stats:
@@ -387,7 +404,6 @@ with tab_stats:
         if config_data["api_id"] == "mkt-frequentation-niveau-freq-max-ligne":
             df = pd.DataFrame(resultats_finaux)
             
-            # Nettoyage des données manquantes pour la couleur grise
             if "frequentation" in df.columns:
                 df["frequentation"] = df["frequentation"].fillna("Non ouverte")
                 df["frequentation"] = df["frequentation"].replace("", "Non ouverte")
@@ -395,16 +411,15 @@ with tab_stats:
             if "ligne" in df.columns and "frequentation" in df.columns:
                 st.write("### 🟢 Répartition de la charge")
                 
-                # GRAPHIQUE AVEC COULEURS PERSONNALISÉES
+                # --- CORRECTION COULEURS ALTAIR ---
+                # On utilise ':N' pour forcer le Nominal et s'assurer que l'échelle s'applique
                 chart = alt.Chart(df).mark_bar().encode(
                     x=alt.X('ligne', sort='-y', title="Ligne de Bus"),
                     y=alt.Y('count()', title="Nombre de relevés"),
-                    # ICI : La magie des couleurs
-                    color=alt.Color('frequentation', 
+                    color=alt.Color('frequentation:N', 
                                     scale=alt.Scale(
                                         domain=['Faible', 'Moyenne', 'Forte', 'Non ouverte'],
                                         range=['#2ecc71', '#f1c40f', '#e74c3c', '#95a5a6'] 
-                                        # Vert, Jaune, Rouge, Gris
                                     ),
                                     legend=alt.Legend(title="Charge")),
                     tooltip=['ligne', 'frequentation', 'count()']
@@ -413,10 +428,13 @@ with tab_stats:
                 
                 st.write("### 📅 Heatmap Horaire")
                 if "tranche_horaire" in df.columns:
+                    # --- CORRECTION COULEUR HEATMAP ---
                     heatmap = alt.Chart(df).mark_rect().encode(
                         x=alt.X('tranche_horaire', title="Heure"),
                         y=alt.Y('ligne', title="Ligne"),
-                        color=alt.Color('count()', title="Densité"),
+                        color=alt.Color('count()', 
+                                        scale=alt.Scale(scheme='orangered'), # Dégradé Jaune -> Rouge
+                                        title="Densité"),
                         tooltip=['ligne', 'tranche_horaire', 'count()']
                     )
                     st.altair_chart(heatmap, use_container_width=True)
