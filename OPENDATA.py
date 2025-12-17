@@ -8,6 +8,7 @@ import base64
 import time
 import pandas as pd
 import re
+import altair as alt # NOUVEL IMPORT POUR LES GRAPHIQUES AVANCÉS
 
 # ==========================================
 # 1. CONFIGURATION MULTI-VILLES
@@ -85,7 +86,7 @@ CONFIG_VILLES = {
         "categories": {
             "🅿️ Parkings (Citédia)": {
                 "api_id": "export-api-parking-citedia",
-                "col_titre": "key", # Nom du parking souvent dans 'key'
+                "col_titre": "key",
                 "col_adresse": "organname",
                 "icone": "parking", "couleur": "blue",
                 "infos_sup": [("status", "✅ État"), ("free", "🟢 Places Libres"), ("max", "🔢 Total")]
@@ -117,7 +118,7 @@ CONFIG_VILLES = {
                 "col_adresse": "tranche_horaire",
                 "icone": "bar-chart", "couleur": "gray",
                 "infos_sup": [("frequentation", "👥 Charge"), ("jour_semaine", "📅 Jour")],
-                "no_map": True # Indicateur : Pas de carte pour ça
+                "no_map": True
             }
         }
     }
@@ -200,7 +201,6 @@ st.markdown("""
     footer {visibility: hidden;}
     header {visibility: hidden;}
     .block-container { padding-top: 1rem; padding-bottom: 1rem; }
-    /* Style pour les expanders */
     .streamlit-expanderHeader {font-weight: bold; color: #F63366;}
 </style>
 """, unsafe_allow_html=True)
@@ -236,31 +236,24 @@ with st.sidebar:
     st.divider()
     st.header("🔍 Données")
     
-    # --- SEPARATION CARTES / STATS (NOUVEAU) ---
-    # On sépare les catégories en deux listes
     cats_cartes = {k: v for k, v in all_categories.items() if not v.get("no_map")}
     cats_stats = {k: v for k, v in all_categories.items() if v.get("no_map")}
     
-    # Menu à boutons radio pour choisir le TYPE de visualisation
     type_visu = st.radio("Type de visualisation :", ["🗺️ Cartes Interactives", "📊 Statistiques & Analyses"])
     
     choix_utilisateur = None
     
     if type_visu == "🗺️ Cartes Interactives":
-        # Affiche uniquement les datasets avec carte
         choix_utilisateur = st.selectbox("Choisir une carte :", list(cats_cartes.keys()))
     else:
-        # Affiche uniquement les datasets stats
         if cats_stats:
             choix_utilisateur = st.selectbox("Choisir une analyse :", list(cats_stats.keys()))
         else:
             st.info("Aucune donnée purement statistique pour cette ville.")
-            # Fallback pour éviter erreur si liste vide
             choix_utilisateur = list(cats_cartes.keys())[0]
 
     st.divider()
     
-    # Filtre affiché seulement si Carte
     mode_filtre = False
     filtre_texte = ""
     if type_visu == "🗺️ Cartes Interactives":
@@ -280,7 +273,7 @@ if cle_unique != st.session_state.dernier_choix:
 config_data = all_categories[choix_utilisateur]
 
 with st.spinner(f"Chargement des données de {ville_actuelle}..."):
-    limit_req = 200 if "agenda" in config_data["api_id"] or "que-faire" in config_data["api_id"] else 500
+    limit_req = 1000 if "frequentation" in config_data["api_id"] else 500
     raw_data = charger_donnees(config_ville["api_url"], config_data["api_id"], cible=limit_req)
 
 tous_resultats = raw_data if isinstance(raw_data, list) else []
@@ -315,9 +308,9 @@ else:
 tab_carte, tab_stats, tab_donnees = st.tabs(["🗺️ Carte", "📊 Statistiques", "📋 Données"])
 
 with tab_carte:
-    # Si on est en mode stats pures ou pas de données, on prévient
     if config_data.get("no_map"):
         st.info("ℹ️ Données statistiques uniquement. Voir l'onglet '📊 Statistiques'.")
+        st.markdown("### 👉 Cette analyse ne contient pas de carte.")
     else:
         style_vue = st.radio("Vue :", ["📍 Points", "🔥 Densité"], horizontal=True)
         m = folium.Map(location=config_ville["coords_center"], zoom_start=config_ville["zoom_start"])
@@ -326,12 +319,11 @@ with tab_carte:
         for site in resultats_finaux:
             lat, lon = None, None
             
-            # --- BLOC DE DETECTION COORDONNEES ---
             geo = site.get("geo_point_2d")
             geom = site.get("geometry")
             lat_lon_special = site.get("lat_lon")
             coords_rennes = site.get("coordonnees")
-            geo_rennes_parking = site.get("geo") # Format spécifique Parking Rennes [lat, lon]
+            geo_rennes_parking = site.get("geo")
             
             if geo: 
                 lat, lon = geo.get("lat"), geo.get("lon")
@@ -343,7 +335,6 @@ with tab_carte:
                 lat, lon = coords_rennes.get("lat"), coords_rennes.get("lon")
             elif geo_rennes_parking and isinstance(geo_rennes_parking, list) and len(geo_rennes_parking) == 2:
                 lat, lon = geo_rennes_parking[0], geo_rennes_parking[1]
-            # -------------------------------------
 
             if lat and lon:
                 coords_heatmap.append([lat, lon])
@@ -382,20 +373,42 @@ with tab_carte:
 
 with tab_stats:
     st.subheader(f"📊 Analyse : {ville_actuelle}")
-    col1, col2 = st.columns(2)
-    with col1: st.metric("Total éléments", len(resultats_finaux))
     
     if len(resultats_finaux) > 0:
-        # Cas spécial Fréquentation Bus
+        # --- ANALYSE AVANCÉE POUR FRÉQUENTATION BUS (ALTAIR) ---
         if config_data["api_id"] == "mkt-frequentation-niveau-freq-max-ligne":
             df = pd.DataFrame(resultats_finaux)
-            if "frequentation" in df.columns:
-                st.write("### Charge des lignes")
-                st.bar_chart(df["frequentation"].value_counts())
+            
             if "ligne" in df.columns and "frequentation" in df.columns:
-                 st.write("### Détail par ligne")
-                 st.dataframe(df[["ligne", "tranche_horaire", "frequentation", "jour_semaine"]])
+                st.write("### 🟢 Quelles sont les lignes les moins saturées ?")
+                st.write("Répartition des niveaux de charge (Faible vs Forte) par ligne.")
+                
+                # Graphique empilé intelligent
+                chart = alt.Chart(df).mark_bar().encode(
+                    x=alt.X('ligne', sort='-y', title="Ligne de Bus"),
+                    y=alt.Y('count()', title="Nombre de relevés"),
+                    color=alt.Color('frequentation', 
+                                    scale=alt.Scale(scheme='spectral'), 
+                                    legend=alt.Legend(title="Charge")),
+                    tooltip=['ligne', 'frequentation', 'count()']
+                ).interactive()
+                st.altair_chart(chart, use_container_width=True)
+                
+                st.write("### 📅 À quelle heure y a-t-il du monde ? (Heatmap)")
+                if "tranche_horaire" in df.columns:
+                    heatmap = alt.Chart(df).mark_rect().encode(
+                        x=alt.X('tranche_horaire', title="Heure"),
+                        y=alt.Y('ligne', title="Ligne"),
+                        color=alt.Color('count()', title="Densité"),
+                        tooltip=['ligne', 'tranche_horaire', 'count()']
+                    )
+                    st.altair_chart(heatmap, use_container_width=True)
+                    
         else:
+            # Stats standards (Codes Postaux)
+            col1, col2 = st.columns(2)
+            with col1: st.metric("Total éléments", len(resultats_finaux))
+            
             liste_cp = []
             for s in resultats_finaux:
                 cp = extraire_cp_intelligent(s, config_data["col_adresse"], prefixe_cp=config_ville["cp_prefix"])
@@ -409,6 +422,8 @@ with tab_stats:
                 st.bar_chart(compte)
             else:
                 st.info("Données géographiques insuffisantes pour un graphique.")
+    else:
+        st.info("Pas de données à analyser.")
 
 with tab_donnees:
     st.dataframe(resultats_finaux)
