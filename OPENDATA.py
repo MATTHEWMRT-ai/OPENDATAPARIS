@@ -182,7 +182,6 @@ def recuperer_coordonnees(site):
         c = site["coordonnees"]
         if isinstance(c, dict): return c.get("lat"), c.get("lon")
     
-    # Autres noms possibles pour parkings ou autres
     if "geo" in site:
          g = site["geo"]
          if isinstance(g, list) and len(g) == 2: return g[0], g[1]
@@ -418,26 +417,31 @@ with tab_stats:
         if config_data["api_id"] == "mkt-frequentation-niveau-freq-max-ligne":
             df = pd.DataFrame(resultats_finaux)
             
-            # 1. MAPPING COLONNES
+            # 1. MAPPING COLONNES AVEC 'jour_semaine'
             map_cols = {
                 'nom_court_ligne': 'ligne',
                 'niveau_frequentation_libelle': 'frequentation',
                 'tranche_horaire_libelle': 'tranche_horaire',
-                'jours_application_libelle': 'jour' # Ajout de la colonne jour
+                'jours_application_libelle': 'jour',
+                'jour_semaine': 'jour' # C'est ICI qu'on mappe ta colonne spécifique
             }
             df = df.rename(columns=map_cols)
 
-            # 2. FILTRE DE PÉRIODE (JOUR) - NOUVEAU
+            # 2. FILTRE DE PÉRIODE (JOUR) - ROBUSTE
+            # Si la colonne 'jour' n'est pas trouvée via le mapping, on cherche une colonne qui contient "jour"
+            if 'jour' not in df.columns:
+                cols_jour = [c for c in df.columns if "jour" in c.lower()]
+                if cols_jour:
+                    df['jour'] = df[cols_jour[0]] # On prend la première colonne qui ressemble à "jour"
+
             if 'jour' in df.columns:
                 périodes_dispo = df['jour'].unique().tolist()
-                # On met un selectbox pour choisir le jour
                 choix_jour = st.selectbox("📅 Choisir la période à analyser :", périodes_dispo)
-                
-                # On filtre le dataframe
                 df = df[df['jour'] == choix_jour]
                 st.success(f"Analyse filtrée pour : {choix_jour} ({len(df)} relevés)")
             else:
-                st.warning("Information 'jour' non trouvée dans les données.")
+                st.warning("⚠️ Impossible de trouver une colonne 'jour' pour filtrer la période.")
+                st.write("Colonnes disponibles :", list(df.columns))
 
             # 3. Nettoyage
             if "frequentation" in df.columns:
