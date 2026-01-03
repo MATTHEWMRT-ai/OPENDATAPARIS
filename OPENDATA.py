@@ -132,64 +132,43 @@ URL_LOGO = "logo_pulse.png"
 # ==========================================
 
 def parser_horaires_robust(texte_horaire):
-    """
-    Extrait les heures de début et fin depuis n'importe quel format.
-    Ex: "07:00:00 - 09:00:00" -> 7, 9
-    """
     try:
         if not isinstance(texte_horaire, str): return 0, 0, 0
-        
-        # On extrait tous les nombres
         nums = [int(s) for s in re.findall(r'\d+', texte_horaire)]
-        
         debut, fin = 0, 0
-        
-        if len(nums) == 2:
-            debut, fin = nums[0], nums[1]
-        elif len(nums) == 4:
-            debut, fin = nums[0], nums[2]
-        elif len(nums) >= 6:
-            debut, fin = nums[0], nums[3]
-            
+        if len(nums) == 2: debut, fin = nums[0], nums[1]
+        elif len(nums) == 4: debut, fin = nums[0], nums[2]
+        elif len(nums) >= 6: debut, fin = nums[0], nums[3]
         duree = fin - debut
         if fin < debut: 
             fin += 24
             duree = fin - debut
-            
         return debut, fin, duree
-    except:
-        pass
+    except: pass
     return 0, 0, 0
 
 def recuperer_coordonnees(site):
-    """ Fonction 'Détective' améliorée pour Parking Rennes """
     geom = site.get("geometry")
     if geom and isinstance(geom, dict) and geom.get("type") == "Point":
         coords = geom.get("coordinates")
         if coords and len(coords) == 2: return coords[1], coords[0] 
-
     if "geo_point_2d" in site:
         geo = site["geo_point_2d"]
         if isinstance(geo, dict): return geo.get("lat"), geo.get("lon")
         if isinstance(geo, list) and len(geo) == 2: return geo[0], geo[1]
-
     geoloc = site.get("geolocalisation")
     if geoloc:
         if isinstance(geoloc, dict): return geoloc.get("lat"), geoloc.get("lon")
         if isinstance(geoloc, list) and len(geoloc) == 2: return geoloc[0], geoloc[1]
-    
     if "coordonnees" in site:
         c = site["coordonnees"]
         if isinstance(c, dict): return c.get("lat"), c.get("lon")
-    
     if "geo" in site:
          g = site["geo"]
          if isinstance(g, list) and len(g) == 2: return g[0], g[1]
-        
     if "latitude" in site and "longitude" in site:
         try: return float(site["latitude"]), float(site["longitude"])
         except: pass
-        
     return None, None
 
 def extraire_cp_intelligent(site_data, col_adresse_config, prefixe_cp="75"):
@@ -231,7 +210,6 @@ def charger_donnees(base_url, api_id, cible=500):
     headers = {'User-Agent': 'Mozilla/5.0'}
     url = f"{base_url}/{api_id}/records"
     tous_les_resultats = []
-    
     for offset in range(0, cible, 100):
         params = {"limit": 100, "offset": offset}
         try:
@@ -245,7 +223,7 @@ def charger_donnees(base_url, api_id, cible=500):
     return tous_les_resultats
 
 # ==========================================
-# 3. INTERFACE STREAMLIT
+# 3. INTERFACE STREAMLIT & MOTEUR RECHERCHE
 # ==========================================
 st.set_page_config(page_title="City Pulse", page_icon="🌍", layout="wide")
 
@@ -262,6 +240,13 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# Initialisation Session State
+if 'ville_select' not in st.session_state:
+    st.session_state.ville_select = "Paris 🗼"
+if 'cat_select' not in st.session_state:
+    st.session_state.cat_select = list(CONFIG_VILLES["Paris 🗼"]["categories"].keys())[0]
+if 'visu_select' not in st.session_state:
+    st.session_state.visu_select = "🗺️ Cartes Interactives"
 if 'dernier_choix' not in st.session_state:
     st.session_state.dernier_choix = None
 
@@ -280,10 +265,76 @@ st.divider()
 with st.sidebar:
     try: st.image(URL_LOGO, width=60)
     except: pass
+    
+    # === MOTEUR DE RECHERCHE GLOBAL ===
+    st.header("🔍 Recherche Rapide")
+    search_query = st.text_input("Ex: 'Bus Rennes', 'Wifi Paris'...", key="search_box")
+    
+    if search_query:
+        q = search_query.lower()
+        found_ville = None
+        found_cat = None
         
+        # 1. Détection Ville
+        if "rennes" in q or "35" in q: found_ville = "Rennes 🏁"
+        elif "paris" in q or "75" in q: found_ville = "Paris 🗼"
+        
+        # Si pas de ville trouvée mais on est déjà sur une ville, on garde la ville actuelle
+        if not found_ville:
+            found_ville = st.session_state.ville_select
+
+        # 2. Détection Catégorie (dans la ville trouvée)
+        cats_dispo = CONFIG_VILLES[found_ville]["categories"]
+        for cat_name in cats_dispo.keys():
+            # Mots clés simples
+            keywords = cat_name.lower().split()
+            if any(k in q for k in keywords if len(k) > 3): # Match si mot > 3 lettres
+                found_cat = cat_name
+                break
+            # Cas spéciaux
+            if "bus" in q and "bus" in cat_name.lower(): found_cat = cat_name
+            if "wifi" in q and "wi-fi" in cat_name.lower(): found_cat = cat_name
+        
+        # 3. Application du changement
+        if found_ville:
+            st.session_state.ville_select = found_ville
+            # Si on change de ville, on reset la catégorie par défaut si pas trouvée
+            if not found_cat:
+                 # On essaye de garder la même catégorie si elle existe dans l'autre ville
+                 if st.session_state.cat_select in CONFIG_VILLES[found_ville]["categories"]:
+                     found_cat = st.session_state.cat_select
+                 else:
+                     found_cat = list(CONFIG_VILLES[found_ville]["categories"].keys())[0]
+            
+            st.session_state.cat_select = found_cat
+            
+            # 4. Auto-switch vers Stats si pas de carte
+            if CONFIG_VILLES[found_ville]["categories"][found_cat].get("no_map"):
+                st.session_state.visu_select = "📊 Statistiques & Analyses"
+            else:
+                st.session_state.visu_select = "🗺️ Cartes Interactives"
+                
+            st.success(f"📍 Navigation vers : {found_ville} - {found_cat}")
+
+    st.divider()
+    
+    # === SÉLECTEURS CLASSIQUES (Connectés au Session State) ===
     st.header("📍 Destination")
-    ville_actuelle = st.selectbox("Choisir une ville :", list(CONFIG_VILLES.keys()))
-    config_ville = CONFIG_VILLES[ville_actuelle]
+    
+    # SÉLECTION VILLE
+    ville_actuelle = st.selectbox(
+        "Choisir une ville :", 
+        list(CONFIG_VILLES.keys()),
+        index=list(CONFIG_VILLES.keys()).index(st.session_state.ville_select),
+        key="widget_ville" # Clé unique pour le widget
+    )
+    # Synchro inverse (Si l'utilisateur change le menu manuellement)
+    if ville_actuelle != st.session_state.ville_select:
+        st.session_state.ville_select = ville_actuelle
+        st.session_state.cat_select = list(CONFIG_VILLES[ville_actuelle]["categories"].keys())[0]
+        st.rerun()
+
+    config_ville = CONFIG_VILLES[st.session_state.ville_select]
     all_categories = config_ville["categories"]
     
     st.divider()
@@ -293,25 +344,46 @@ with st.sidebar:
     st.divider()
     st.header("🔍 Données")
     
+    # SÉLECTION VISUALISATION
+    type_visu = st.radio(
+        "Type de visualisation :", 
+        ["🗺️ Cartes Interactives", "📊 Statistiques & Analyses"],
+        index=0 if st.session_state.visu_select == "🗺️ Cartes Interactives" else 1,
+        key="widget_visu"
+    )
+    if type_visu != st.session_state.visu_select:
+        st.session_state.visu_select = type_visu
+    
+    # Filtrage des catégories selon le mode (Carte ou Stats)
     cats_cartes = {k: v for k, v in all_categories.items() if not v.get("no_map")}
     cats_stats = {k: v for k, v in all_categories.items() if v.get("no_map")}
     
-    type_visu = st.radio("Type de visualisation :", ["🗺️ Cartes Interactives", "📊 Statistiques & Analyses"])
-    
-    choix_utilisateur = None
-    if type_visu == "🗺️ Cartes Interactives":
-        choix_utilisateur = st.selectbox("Choisir une carte :", list(cats_cartes.keys()))
+    options_cat = []
+    if st.session_state.visu_select == "🗺️ Cartes Interactives":
+        options_cat = list(cats_cartes.keys())
     else:
-        if cats_stats:
-            choix_utilisateur = st.selectbox("Choisir une analyse :", list(cats_stats.keys()))
-        else:
-            st.info("Aucune donnée purement statistique pour cette ville.")
-            choix_utilisateur = list(cats_cartes.keys())[0]
+        options_cat = list(cats_stats.keys()) if cats_stats else list(cats_cartes.keys())
+
+    # Vérification que la catégorie sélectionnée existe dans la liste filtrée
+    index_cat = 0
+    if st.session_state.cat_select in options_cat:
+        index_cat = options_cat.index(st.session_state.cat_select)
+    
+    # SÉLECTION CATÉGORIE
+    choix_utilisateur = st.selectbox(
+        "Choisir une donnée :", 
+        options_cat,
+        index=index_cat,
+        key="widget_cat"
+    )
+    # Synchro
+    if choix_utilisateur != st.session_state.cat_select:
+        st.session_state.cat_select = choix_utilisateur
 
     st.divider()
     mode_filtre = False
     filtre_texte = ""
-    if type_visu == "🗺️ Cartes Interactives":
+    if st.session_state.visu_select == "🗺️ Cartes Interactives":
         st.header("🔎 Filtres")
         mode_filtre = st.toggle("Filtrer par zone", value=False)
         if mode_filtre:
@@ -319,21 +391,25 @@ with st.sidebar:
             filtre_texte = st.text_input("Recherche :")
 
 # --- CHARGEMENT ---
-cle_unique = f"{ville_actuelle}_{choix_utilisateur}"
+# On utilise les variables du Session State pour charger
+ville_active = st.session_state.ville_select
+cat_active = st.session_state.cat_select
+config_active_ville = CONFIG_VILLES[ville_active]
+config_active_data = config_active_ville["categories"][cat_active]
+
+cle_unique = f"{ville_active}_{cat_active}"
 if cle_unique != st.session_state.dernier_choix:
     if activer_voix:
-        jouer_son_automatique(f"Chargement : {ville_actuelle}, {choix_utilisateur}")
+        jouer_son_automatique(f"Chargement : {ville_active}, {cat_active}")
     st.session_state.dernier_choix = cle_unique
 
-config_data = all_categories[choix_utilisateur]
-
-with st.spinner(f"Chargement des données de {ville_actuelle}..."):
-    limit_req = 1500 if "frequentation" in config_data["api_id"] else 500
-    raw_data = charger_donnees(config_ville["api_url"], config_data["api_id"], cible=limit_req)
+with st.spinner(f"Chargement des données de {ville_active}..."):
+    limit_req = 1500 if "frequentation" in config_active_data["api_id"] else 500
+    raw_data = charger_donnees(config_active_ville["api_url"], config_active_data["api_id"], cible=limit_req)
 
 tous_resultats = raw_data if isinstance(raw_data, list) else []
 
-# --- FILTRAGE TEXTUEL ---
+# --- FILTRAGE TEXTUEL (Zone) ---
 resultats_finaux = []
 if len(tous_resultats) > 0:
     if mode_filtre and filtre_texte:
@@ -354,13 +430,13 @@ if len(tous_resultats) > 0:
             st.success(f"✅ Filtre actif : {len(resultats_finaux)} lieux.")
     else:
         resultats_finaux = tous_resultats
-        if type_visu == "🗺️ Cartes Interactives":
-            st.success(f"🌍 {ville_actuelle} : {len(resultats_finaux)} lieux trouvés.")
+        if st.session_state.visu_select == "🗺️ Cartes Interactives":
+            st.success(f"🌍 {ville_active} : {len(resultats_finaux)} lieux trouvés.")
 else:
     st.info("Pas de données disponibles pour cette catégorie.")
 
 # --- AFFICHAGE ---
-if config_data.get("no_map"):
+if config_active_data.get("no_map"):
     tab_stats, tab_donnees = st.tabs(["📊 Statistiques", "📋 Données"])
     tab_carte = None 
 else:
@@ -369,7 +445,7 @@ else:
 if tab_carte:
     with tab_carte:
         style_vue = st.radio("Vue :", ["📍 Points", "🔥 Densité"], horizontal=True)
-        m = folium.Map(location=config_ville["coords_center"], zoom_start=config_ville["zoom_start"])
+        m = folium.Map(location=config_active_ville["coords_center"], zoom_start=config_active_ville["zoom_start"])
         coords_heatmap = []
         
         for site in resultats_finaux:
@@ -378,19 +454,19 @@ if tab_carte:
             if lat and lon:
                 coords_heatmap.append([lat, lon])
                 if style_vue == "📍 Points":
-                    titre = site.get(config_data["col_titre"]) or "Lieu"
+                    titre = site.get(config_active_data["col_titre"]) or "Lieu"
                     titre = str(titre).replace('"', '') 
-                    adresse = site.get(config_data["col_adresse"]) or ""
+                    adresse = site.get(config_active_data["col_adresse"]) or ""
                     
                     html_image = ""
-                    if "image_col" in config_data:
-                        url_img = site.get(config_data["image_col"])
+                    if "image_col" in config_active_data:
+                        url_img = site.get(config_active_data["image_col"])
                         if isinstance(url_img, dict): url_img = url_img.get("url")
                         if url_img: html_image = f'<img src="{url_img}" width="200px" style="border-radius:5px; margin-bottom:10px;"><br>'
 
                     popup_content = f"{html_image}<b>{titre}</b><br><i>{adresse}</i>"
                     infos_html = ""
-                    for k, v in config_data["infos_sup"]:
+                    for k, v in config_active_data["infos_sup"]:
                         val = site.get(k)
                         if val: 
                             if len(str(val)) > 100: val = str(val)[:100] + "..."
@@ -399,7 +475,7 @@ if tab_carte:
 
                     folium.Marker(
                         [lat, lon], popup=folium.Popup(popup_content, max_width=250),
-                        icon=folium.Icon(color=config_data["couleur"], icon=config_data["icone"], prefix="fa")
+                        icon=folium.Icon(color=config_active_data["couleur"], icon=config_active_data["icone"], prefix="fa")
                     ).add_to(m)
 
         if style_vue == "🔥 Densité" and coords_heatmap:
@@ -411,10 +487,10 @@ if tab_carte:
             st.warning("⚠️ Aucune coordonnée GPS trouvée (Vérifiez les données brutes).")
 
 with tab_stats:
-    st.subheader(f"📊 Analyse : {ville_actuelle}")
+    st.subheader(f"📊 Analyse : {ville_active}")
     
     if len(resultats_finaux) > 0:
-        if config_data["api_id"] == "mkt-frequentation-niveau-freq-max-ligne":
+        if config_active_data["api_id"] == "mkt-frequentation-niveau-freq-max-ligne":
             df = pd.DataFrame(resultats_finaux)
             
             # 1. MAPPING COLONNES
@@ -459,7 +535,6 @@ with tab_stats:
                     st.write("### 🟢 Répartition de la charge (%)")
                     st.caption("Pour chaque ligne, quelle proportion du temps est calme (vert) ou chargée (rouge) ?")
                     
-                    # NOUVEAU GRAPHIQUE 1 : Horizontal Stacked 100%
                     chart = alt.Chart(df_clean).mark_bar().encode(
                         y=alt.Y('ligne', sort='descending', title="Ligne"),
                         x=alt.X('sum(duree_heures)', stack='normalize', axis=alt.Axis(format='%'), title="Répartition du temps"),
@@ -491,9 +566,9 @@ with tab_stats:
             
             liste_cp = []
             for s in resultats_finaux:
-                cp = extraire_cp_intelligent(s, config_data["col_adresse"], prefixe_cp=config_ville["cp_prefix"])
+                cp = extraire_cp_intelligent(s, config_active_data["col_adresse"], prefixe_cp=config_active_ville["cp_prefix"])
                 if cp == "Inconnu": cp = str(s.get("address_zipcode", "Inconnu"))
-                if cp != "Inconnu" and config_ville["cp_prefix"] in cp: 
+                if cp != "Inconnu" and config_active_ville["cp_prefix"] in cp: 
                     liste_cp.append(cp)
             
             if len(liste_cp) > 0:
