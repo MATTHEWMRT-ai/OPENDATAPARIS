@@ -275,60 +275,44 @@ with st.sidebar:
         found_ville = None
         found_cat = None
         
-        # 1. Détection Ville
         if "rennes" in q or "35" in q: found_ville = "Rennes 🏁"
         elif "paris" in q or "75" in q: found_ville = "Paris 🗼"
-        
-        # Si pas de ville trouvée mais on est déjà sur une ville, on garde la ville actuelle
-        if not found_ville:
-            found_ville = st.session_state.ville_select
+        if not found_ville: found_ville = st.session_state.ville_select
 
-        # 2. Détection Catégorie (dans la ville trouvée)
         cats_dispo = CONFIG_VILLES[found_ville]["categories"]
         for cat_name in cats_dispo.keys():
-            # Mots clés simples
             keywords = cat_name.lower().split()
-            if any(k in q for k in keywords if len(k) > 3): # Match si mot > 3 lettres
-                found_cat = cat_name
-                break
-            # Cas spéciaux
+            if any(k in q for k in keywords if len(k) > 3): found_cat = cat_name
             if "bus" in q and "bus" in cat_name.lower(): found_cat = cat_name
             if "wifi" in q and "wi-fi" in cat_name.lower(): found_cat = cat_name
         
-        # 3. Application du changement
         if found_ville:
             st.session_state.ville_select = found_ville
-            # Si on change de ville, on reset la catégorie par défaut si pas trouvée
             if not found_cat:
-                 # On essaye de garder la même catégorie si elle existe dans l'autre ville
                  if st.session_state.cat_select in CONFIG_VILLES[found_ville]["categories"]:
                      found_cat = st.session_state.cat_select
                  else:
                      found_cat = list(CONFIG_VILLES[found_ville]["categories"].keys())[0]
-            
             st.session_state.cat_select = found_cat
             
-            # 4. Auto-switch vers Stats si pas de carte
             if CONFIG_VILLES[found_ville]["categories"][found_cat].get("no_map"):
                 st.session_state.visu_select = "📊 Statistiques & Analyses"
             else:
                 st.session_state.visu_select = "🗺️ Cartes Interactives"
                 
             st.success(f"📍 Navigation vers : {found_ville} - {found_cat}")
+            time.sleep(1) # Temps de lecture
+            st.rerun() # FORÇAGE DU RECHARGEMENT
 
     st.divider()
     
-    # === SÉLECTEURS CLASSIQUES (Connectés au Session State) ===
     st.header("📍 Destination")
-    
-    # SÉLECTION VILLE
     ville_actuelle = st.selectbox(
         "Choisir une ville :", 
         list(CONFIG_VILLES.keys()),
         index=list(CONFIG_VILLES.keys()).index(st.session_state.ville_select),
-        key="widget_ville" # Clé unique pour le widget
+        key="widget_ville"
     )
-    # Synchro inverse (Si l'utilisateur change le menu manuellement)
     if ville_actuelle != st.session_state.ville_select:
         st.session_state.ville_select = ville_actuelle
         st.session_state.cat_select = list(CONFIG_VILLES[ville_actuelle]["categories"].keys())[0]
@@ -344,17 +328,6 @@ with st.sidebar:
     st.divider()
     st.header("🔍 Données")
     
-    # SÉLECTION VISUALISATION
-    type_visu = st.radio(
-        "Type de visualisation :", 
-        ["🗺️ Cartes Interactives", "📊 Statistiques & Analyses"],
-        index=0 if st.session_state.visu_select == "🗺️ Cartes Interactives" else 1,
-        key="widget_visu"
-    )
-    if type_visu != st.session_state.visu_select:
-        st.session_state.visu_select = type_visu
-    
-    # Filtrage des catégories selon le mode (Carte ou Stats)
     cats_cartes = {k: v for k, v in all_categories.items() if not v.get("no_map")}
     cats_stats = {k: v for k, v in all_categories.items() if v.get("no_map")}
     
@@ -364,11 +337,21 @@ with st.sidebar:
     else:
         options_cat = list(cats_stats.keys()) if cats_stats else list(cats_cartes.keys())
 
-    # Vérification que la catégorie sélectionnée existe dans la liste filtrée
     index_cat = 0
     if st.session_state.cat_select in options_cat:
         index_cat = options_cat.index(st.session_state.cat_select)
     
+    # SÉLECTION TYPE VISU
+    type_visu = st.radio(
+        "Type de visualisation :", 
+        ["🗺️ Cartes Interactives", "📊 Statistiques & Analyses"],
+        index=0 if st.session_state.visu_select == "🗺️ Cartes Interactives" else 1,
+        key="widget_visu"
+    )
+    if type_visu != st.session_state.visu_select:
+        st.session_state.visu_select = type_visu
+        st.rerun()
+
     # SÉLECTION CATÉGORIE
     choix_utilisateur = st.selectbox(
         "Choisir une donnée :", 
@@ -376,9 +359,9 @@ with st.sidebar:
         index=index_cat,
         key="widget_cat"
     )
-    # Synchro
     if choix_utilisateur != st.session_state.cat_select:
         st.session_state.cat_select = choix_utilisateur
+        st.rerun()
 
     st.divider()
     mode_filtre = False
@@ -391,7 +374,6 @@ with st.sidebar:
             filtre_texte = st.text_input("Recherche :")
 
 # --- CHARGEMENT ---
-# On utilise les variables du Session State pour charger
 ville_active = st.session_state.ville_select
 cat_active = st.session_state.cat_select
 config_active_ville = CONFIG_VILLES[ville_active]
@@ -409,7 +391,7 @@ with st.spinner(f"Chargement des données de {ville_active}..."):
 
 tous_resultats = raw_data if isinstance(raw_data, list) else []
 
-# --- FILTRAGE TEXTUEL (Zone) ---
+# --- FILTRAGE TEXTUEL ---
 resultats_finaux = []
 if len(tous_resultats) > 0:
     if mode_filtre and filtre_texte:
@@ -493,7 +475,6 @@ with tab_stats:
         if config_active_data["api_id"] == "mkt-frequentation-niveau-freq-max-ligne":
             df = pd.DataFrame(resultats_finaux)
             
-            # 1. MAPPING COLONNES
             map_cols = {
                 'nom_court_ligne': 'ligne',
                 'niveau_frequentation_libelle': 'frequentation',
@@ -503,11 +484,9 @@ with tab_stats:
             }
             df = df.rename(columns=map_cols)
 
-            # 2. FILTRE DE PÉRIODE (JOUR)
             if 'jour' not in df.columns:
                 cols_jour = [c for c in df.columns if "jour" in c.lower()]
-                if cols_jour:
-                    df['jour'] = df[cols_jour[0]]
+                if cols_jour: df['jour'] = df[cols_jour[0]]
 
             if 'jour' in df.columns:
                 périodes_dispo = df['jour'].unique().tolist()
@@ -517,18 +496,14 @@ with tab_stats:
             else:
                 st.warning("⚠️ Information 'jour' non trouvée.")
 
-            # 3. Nettoyage
             if "frequentation" in df.columns:
                 df["frequentation"] = df["frequentation"].fillna("Non ouverte")
                 df["frequentation"] = df["frequentation"].replace("", "Non ouverte")
 
-            # 4. Traitement & Graphiques
             if "ligne" in df.columns and "frequentation" in df.columns and "tranche_horaire" in df.columns:
-                
                 parsed_data = df['tranche_horaire'].apply(lambda x: pd.Series(parser_horaires_robust(x)))
                 parsed_data.columns = ['heure_debut', 'heure_fin', 'duree_heures']
                 df = pd.concat([df, parsed_data], axis=1)
-                
                 df_clean = df[df['duree_heures'] > 0]
                 
                 if not df_clean.empty:
