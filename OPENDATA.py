@@ -129,10 +129,10 @@ CONFIG_VILLES = {
             },
             "📊 Fréquentation Lignes (Stats uniquement)": {
                 "api_id": "mkt-frequentation-niveau-freq-max-ligne",
-                "col_titre": "nom_court_ligne",
-                "col_adresse": "tranche_horaire_libelle", 
+                "col_titre": "ligne", # Mis à jour selon tes colonnes
+                "col_adresse": "tranche_horaire", 
                 "icone": "bar-chart", "couleur": "gray",
-                "infos_sup": [("niveau_frequentation_libelle", "👥 Charge"), ("tranche_horaire_libelle", "🕒 Heure")],
+                "infos_sup": [("frequentation", "👥 Charge"), ("tranche_horaire", "🕒 Heure")],
                 "no_map": True,
                 "mots_cles": ["stats", "frequentation", "monde", "charge"]
             }
@@ -405,7 +405,8 @@ if cle_unique != st.session_state.dernier_choix:
     st.session_state.dernier_choix = cle_unique
 
 with st.spinner(f"Chargement des données de {ville_actuelle}..."):
-    limit_req = 200
+    # Limite réduite temporairement pour éviter le blocage API (remettre à 1500 plus tard)
+    limit_req = 500 if "frequentation" in config_data["api_id"] else 500
     raw_data = charger_donnees(config_ville["api_url"], config_data["api_id"], cible=limit_req)
 
 tous_resultats = raw_data if isinstance(raw_data, list) else []
@@ -492,36 +493,43 @@ with tab_stats:
     st.subheader(f"📊 Analyse : {ville_actuelle}")
     
     if len(resultats_finaux) > 0:
-        # --- CAS SPÉCIAL : BUS RENNES (GRAPHIQUES ROBUSTES) ---
+        # --- CAS SPÉCIAL : BUS RENNES (Fréquentation) ---
         if config_data["api_id"] == "mkt-frequentation-niveau-freq-max-ligne":
             df = pd.DataFrame(resultats_finaux)
             
             # 1. Normalisation noms de colonnes
             df.columns = [c.lower() for c in df.columns]
             
-            # 2. Détection intelligente des colonnes
-            col_ligne = next((c for c in df.columns if "ligne" in c and "nom" in c), None)
-            col_freq = next((c for c in df.columns if "freq" in c and "lib" in c), None)
-            col_heure = next((c for c in df.columns if "horaire" in c), None)
-            col_jour = next((c for c in df.columns if "jour" in c), None)
+            # 2. Mapping Stricte des colonnes (basé sur tes données)
+            # Tes colonnes : 'ligne', 'tranche_horaire', 'frequentation', 'jour_semaine'
+            col_ligne = next((c for c in df.columns if "ligne" in c), None)
+            col_freq = next((c for c in df.columns if "frequentation" in c and "niveau" not in c), None) 
+            if not col_freq: col_freq = next((c for c in df.columns if "frequentation" in c), None)
+
+            col_heure = next((c for c in df.columns if "tranche" in c or "horaire" in c), None)
+            col_jour = next((c for c in df.columns if "jour" in c), None) # Detecte 'jour_semaine'
 
             if col_ligne and col_freq and col_heure:
                 rename_dict = {col_ligne: 'ligne', col_freq: 'frequentation', col_heure: 'tranche_horaire'}
                 if col_jour: rename_dict[col_jour] = 'jour'
                 df = df.rename(columns=rename_dict)
 
-                # Filtre Jour
+                # 3. FILTRE JOUR (Pour prendre en compte TOUS les jours)
                 if 'jour' in df.columns:
                     df = df.dropna(subset=['jour'])
                     périodes = sorted(df['jour'].unique().astype(str).tolist())
+                    
                     if périodes:
-                        # Cherche "lundi" par défaut, sinon le premier
+                        # On affiche un sélecteur pour que l'utilisateur puisse voir tous les jours dispo
+                        st.info("💡 Données disponibles pour : " + ", ".join(périodes))
                         idx = next((i for i, p in enumerate(périodes) if "lundi" in p.lower()), 0)
-                        choix_jour = st.selectbox("📅 Période :", périodes, index=idx)
+                        choix_jour = st.selectbox("📅 Choisir le jour à afficher :", périodes, index=idx)
                         df = df[df['jour'] == choix_jour]
-                        st.info(f"Analyse : {choix_jour} ({len(df)} créneaux)")
+                    else:
+                        st.warning("Colonnes 'jour' vide.")
 
-                # Nettoyage
+                # 4. Nettoyage & COULEURS
+                # On remplace les vides par "Non ouverte"
                 df["frequentation"] = df["frequentation"].fillna("Non ouverte").replace("", "Non ouverte")
                 
                 # Parsing Heures
@@ -532,16 +540,25 @@ with tab_stats:
                 df_clean = df[df['duree_heures'] > 0].copy()
 
                 if not df_clean.empty:
-                    st.write("### 🟢 Répartition de la charge (%)")
-                    # Couleurs
+                    st.write(f"### 🟢 Répartition de la charge ({choix_jour})")
+                    
+                    # --- CONFIGURATION COULEURS DEMANDÉE ---
+                    # Rouge pour non ouverte
                     dom = ['Faible', 'Moyenne', 'Forte', 'Non ouverte']
-                    rng = ['#2ecc71', '#f1c40f', '#e74c3c', '#95a5a6']
+                    rng = [
+                        '#2ecc71', # Vert (Faible)
+                        '#f1c40f', # Jaune/Orange (Moyenne)
+                        '#8e44ad', # Violet (Forte - pour contraste)
+                        '#FF0000'  # ROUGE (Non ouverte - Comme demandé)
+                    ]
 
                     # Graphique 1 : Barres empilées
                     chart = alt.Chart(df_clean).mark_bar().encode(
                         y=alt.Y('ligne', title="Ligne"),
                         x=alt.X('sum(duree_heures)', stack='normalize', axis=alt.Axis(format='%'), title="% Temps"),
-                        color=alt.Color('frequentation:N', scale=alt.Scale(domain=dom, range=rng)),
+                        color=alt.Color('frequentation:N', 
+                                        scale=alt.Scale(domain=dom, range=rng),
+                                        legend=alt.Legend(title="Charge")),
                         tooltip=['ligne', 'frequentation']
                     ).interactive()
                     st.altair_chart(chart, use_container_width=True)
@@ -552,14 +569,14 @@ with tab_stats:
                         x=alt.X('heure_debut:Q', title="Heure", scale=alt.Scale(domain=[5, 24])),
                         x2='heure_fin:Q',
                         y=alt.Y('ligne:N'),
-                        color=alt.Color('frequentation:N'),
+                        color=alt.Color('frequentation:N', scale=alt.Scale(domain=dom, range=rng)),
                         tooltip=['ligne', 'tranche_horaire', 'frequentation']
                     ).properties(height=max(400, len(df_clean['ligne'].unique())*20)).interactive()
                     st.altair_chart(heatmap, use_container_width=True)
                 else:
                     st.warning("⚠️ Données présentes mais calcul horaire impossible.")
             else:
-                st.error("⚠️ Colonnes API Bus introuvables. L'API a changé de format.")
+                st.error("⚠️ Colonnes API Bus introuvables.")
                 st.write("Colonnes reçues :", df.columns.tolist())
 
         # --- CAS GÉNÉRAL (AUTRES STATS) ---
