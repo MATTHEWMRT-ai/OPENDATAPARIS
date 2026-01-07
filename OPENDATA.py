@@ -9,7 +9,7 @@ import time
 import pandas as pd
 import re
 import altair as alt
-import narwhals as nw # Utilisé en interne par Altair, on l'importe au cas où
+import narwhals as nw 
 
 # ==========================================
 # 0. CONFIGURATION PAGE
@@ -182,21 +182,40 @@ def moteur_recherche(requete, config):
     return ville_trouvee, cat_trouvee
 
 def parser_horaires_robust(texte_horaire):
-    """ Extrait début/fin d'un string (ex: '7h-9h' ou '07:00:00') """
+    """ 
+    NOUVELLE VERSION INTELLIGENTE :
+    - Si format "07:00" -> Extrait 7h et considère que ça dure 30 min (jusqu'à 7h30)
+    - Si format "07:00 - 09:00" -> Garde l'ancienne logique
+    """
     try:
-        if not isinstance(texte_horaire, str): return 0, 0, 0
-        nums = [int(s) for s in re.findall(r'\d+', texte_horaire)]
+        texte = str(texte_horaire).strip()
+        
+        # CAS 1 : Format "HH:MM" simple (Ex: "07:00")
+        # On suppose que c'est un créneau de 30 minutes
+        if re.match(r'^\d{1,2}:\d{2}$', texte):
+            parts = [int(s) for s in re.findall(r'\d+', texte)]
+            if len(parts) == 2:
+                h, m = parts[0], parts[1]
+                debut = h + m / 60.0
+                fin = debut + 0.5 # On ajoute 30 minutes (0.5 heure)
+                return debut, fin, 0.5
+
+        # CAS 2 : Anciens formats complexes ou plages (Ex: "07:00 - 09:00")
+        nums = [int(s) for s in re.findall(r'\d+', texte)]
         debut, fin = 0, 0
-        if len(nums) == 2:
+        
+        if len(nums) == 2: # Ex: "7h - 9h"
             debut, fin = nums[0], nums[1]
-        elif len(nums) == 4:
-            debut, fin = nums[0], nums[2]
+        elif len(nums) == 4: # Ex: "07:00 - 09:00"
+            debut, fin = nums[0], nums[2] # On prend les heures
         elif len(nums) >= 6:
             debut, fin = nums[0], nums[3]
+
         duree = fin - debut
         if fin < debut: 
             fin += 24
             duree = fin - debut
+        
         return debut, fin, duree
     except:
         pass
@@ -477,68 +496,84 @@ with tab_stats:
         if config_data["api_id"] == "mkt-frequentation-niveau-freq-max-ligne":
             df = pd.DataFrame(resultats_finaux)
             
-            # 1. Normalisation
+            # 1. Normalisation des colonnes
             df.columns = [c.lower() for c in df.columns]
+            df = df.loc[:, ~df.columns.duplicated()] # Supprime les doublons
             
-            # 2. Suppression doublons colonnes
-            df = df.loc[:, ~df.columns.duplicated()]
-            
-            # 3. MAPPING FORCE : On veut 'frequentation' uniquement
-            # On ignore 'niveau_frequentation' si present, on veut la colonne texte
+            # 2. SÉLECTION STRICTE DE LA COLONNE
+            # On cherche "frequentation" (et on évite niveau_frequentation si possible, sauf si c'est la seule)
+            if "frequentation" in df.columns:
+                col_target = "frequentation"
+            elif "niveau_frequentation" in df.columns:
+                col_target = "niveau_frequentation"
+            else:
+                col_target = None
+
             map_dict = {
                 "ligne": "ligne",
                 "tranche_horaire": "tranche_horaire",
                 "jour_semaine": "jour",
-                "frequentation": "frequentation" # On cible explicitement celle-ci
+                col_target: "frequentation" # On renomme la cible en 'frequentation'
             }
-            
-            # Renommage
-            cols_to_rename = {k:v for k,v in map_dict.items() if k in df.columns}
-            df = df.rename(columns=cols_to_rename)
 
-            # 4. FILTRE JOUR
-            if 'jour' in df.columns:
-                df['jour'] = df['jour'].fillna("Indéfini")
-                périodes = sorted(df['jour'].unique().astype(str).tolist())
-                if périodes:
-                    idx = next((i for i, p in enumerate(périodes) if "lundi" in p.lower()), 0)
-                    choix_jour = st.selectbox("📅 Choisir le jour à afficher :", périodes, index=idx)
-                    df = df[df['jour'] == choix_jour]
+            # On vérifie la présence des colonnes
+            if col_target and "ligne" in df.columns and "tranche_horaire" in df.columns:
+                df = df.rename(columns={k:v for k,v in map_dict.items() if k in df.columns})
 
-            # 5. NETTOYAGE & FORMATAGE
-            if "frequentation" in df.columns:
-                # 1. Remplir les vides
+                # 3. FILTRE JOUR
+                if 'jour' in df.columns:
+                    df['jour'] = df['jour'].fillna("Indéfini")
+                    périodes = sorted(df['jour'].unique().astype(str).tolist())
+                    if périodes:
+                        # On essaie de trouver "Lundi" par défaut
+                        idx = next((i for i, p in enumerate(périodes) if "lundi" in p.lower()), 0)
+                        choix_jour = st.selectbox("📅 Choisir le jour à afficher :", périodes, index=idx)
+                        df = df[df['jour'] == choix_jour]
+
+                # 4. NETTOYAGE DES VALEURS 
+                # On remplit les vides
                 df["frequentation"] = df["frequentation"].fillna("Non ouverte").replace("", "Non ouverte")
-                # 2. IMPORTANT : Mettre en Majuscule (faible -> Faible) pour matcher les couleurs
-                df["frequentation"] = df["frequentation"].astype(str).str.capitalize()
-                # 3. Cas spécial pour "Non ouverte" qui doit rester tel quel (capitalize le fait déjà : Non ouverte)
                 
-                # Parsing horaires
+                # On normalise le texte pour qu'il matche les couleurs (Haute -> Forte, Faible -> Faible, etc.)
+                def normaliser_freq(val):
+                    val = str(val).lower().strip()
+                    if "faible" in val: return "Faible"
+                    if "moyen" in val: return "Moyenne"
+                    if "haute" in val or "forte" in val: return "Forte" # Corrige le problème "Haute"
+                    return "Non ouverte" # Tout le reste devient Rouge
+
+                df["frequentation"] = df["frequentation"].apply(normaliser_freq)
+
+                # 5. Parsing horaires (Version corrigée appliquée ici)
                 parsed = df['tranche_horaire'].apply(lambda x: pd.Series(parser_horaires_robust(str(x))))
                 parsed.columns = ['heure_debut', 'heure_fin', 'duree_heures']
                 
                 df = df.reset_index(drop=True)
                 df = pd.concat([df, parsed], axis=1)
                 
+                # On garde ce qui a une durée > 0
                 df_clean = df[df['duree_heures'] > 0].copy()
 
                 if not df_clean.empty:
                     st.write(f"### 🟢 Répartition de la charge ({choix_jour})")
                     
-                    # Configuration Couleurs (Bien alignée avec les valeurs capitalize)
-                    dom = ['Faible', 'Moyenne', 'Haute', 'Non ouverte']
-                    rng = ['#2ecc71', '#f1c40f', '#8e44ad', '#FF0000']
+                    # --- COULEURS ---
+                    # Maintenant que les données sont normalisées (Faible, Moyenne, Forte), ça va marcher
+                    dom = ['Faible', 'Moyenne', 'Forte', 'Non ouverte']
+                    rng = ['#2ecc71', '#f1c40f', '#8e44ad', '#FF0000'] # Vert, Jaune, Violet, Rouge
 
-                    # Graphique 1
+                    # Graphique 1 : Barres empilées
                     chart = alt.Chart(df_clean).mark_bar().encode(
                         y=alt.Y('ligne', title="Ligne"),
                         x=alt.X('sum(duree_heures)', stack='normalize', axis=alt.Axis(format='%'), title="% Temps"),
-                        color=alt.Color('frequentation:N', scale=alt.Scale(domain=dom, range=rng), legend=alt.Legend(title="Charge")),
+                        color=alt.Color('frequentation:N', 
+                                        scale=alt.Scale(domain=dom, range=rng),
+                                        legend=alt.Legend(title="Charge")),
                         tooltip=['ligne', 'frequentation']
                     ).interactive()
                     st.altair_chart(chart, use_container_width=True)
                     
-                    # Graphique 2
+                    # Graphique 2 : Planning
                     st.write("### 📅 Planning Horaire")
                     heatmap = alt.Chart(df_clean).mark_rect().encode(
                         x=alt.X('heure_debut:Q', title="Heure (5h-24h)", scale=alt.Scale(domain=[5, 24])),
@@ -551,10 +586,10 @@ with tab_stats:
                 else:
                     st.warning("⚠️ Pas de données horaires valides.")
             else:
-                st.error("⚠️ Colonne 'frequentation' introuvable.")
-                st.write("Colonnes dispo :", df.columns.tolist())
+                st.error("⚠️ Colonnes API Bus introuvables.")
+                st.write("Colonnes reçues :", df.columns.tolist())
 
-        # --- CAS GÉNÉRAL (AUTRES STATS) ---
+        # --- CAS GÉNÉRAL ---
         else:
             col1, col2 = st.columns(2)
             with col1: st.metric("Total éléments", len(resultats_finaux))
