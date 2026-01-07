@@ -288,7 +288,12 @@ def charger_donnees(base_url, api_id, cible=500):
 # ==========================================
 # 3. INTERFACE STREAMLIT
 # ==========================================
-st.set_page_config(page_title="City Pulse", page_icon="🌍", layout="wide")
+st.set_page_config(
+    page_title="City Pulse", 
+    page_icon="🌍", 
+    layout="wide", 
+    initial_sidebar_state="expanded"  # <--- C'est ça qui force l'ouverture
+)
 
 st.markdown("""
 <style>
