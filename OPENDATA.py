@@ -509,49 +509,57 @@ with tab_stats:
         if config_data["api_id"] == "mkt-frequentation-niveau-freq-max-ligne":
             df = pd.DataFrame(resultats_finaux)
             
-            # 1. Normalisation noms de colonnes
+            # 1. Normalisation des noms de colonnes (tout en minuscule)
             df.columns = [c.lower() for c in df.columns]
             
-            # 2. Mapping Stricte des colonnes (basé sur tes données)
-            # Tes colonnes : 'ligne', 'tranche_horaire', 'frequentation', 'jour_semaine', 'niveau_frequentation'
+            # 2. SUPPRESSION DES DOUBLONS (Le Correctif Anti-Crash)
+            # Si l'API renvoie "Ligne" et "ligne", le lower() crée un doublon. On le vire ici.
+            df = df.loc[:, ~df.columns.duplicated()]
             
-            # On cherche 'niveau_frequentation' en priorité, sinon 'frequentation'
+            # 3. Renommage intelligent sans conflit
+            # On cherche la meilleure colonne pour la fréquentation
             col_freq = "niveau_frequentation" if "niveau_frequentation" in df.columns else "frequentation"
             
+            # Si on va renommer 'niveau_frequentation' en 'frequentation',
+            # il faut d'abord supprimer la colonne 'frequentation' si elle existe déjà pour éviter le DuplicateError
+            if col_freq != "frequentation" and "frequentation" in df.columns:
+                df = df.drop(columns=["frequentation"])
+
             map_dict = {
                 "ligne": "ligne",
                 "tranche_horaire": "tranche_horaire",
                 "jour_semaine": "jour",
                 col_freq: "frequentation"
             }
-
-            # On vérifie que les colonnes existent bien
+            
+            # On vérifie que les colonnes clés existent
             cols_ok = [c for c in map_dict.keys() if c in df.columns]
-
-            if len(cols_ok) >= 3: # Si on a au moins ligne, horaire et freq
+            
+            if len(cols_ok) >= 3: 
                 df = df.rename(columns={k:v for k,v in map_dict.items() if k in df.columns})
 
-                # 3. FILTRE JOUR
+                # 4. FILTRE JOUR
                 if 'jour' in df.columns:
                     df['jour'] = df['jour'].fillna("Indéfini")
                     périodes = sorted(df['jour'].unique().astype(str).tolist())
                     
                     if périodes:
-                        st.info("💡 Jours disponibles : " + ", ".join(périodes))
-                        # Cherche "Lundi" ou "Semaine" par défaut
+                        # Cherche "Lundi" par défaut
                         idx = next((i for i, p in enumerate(périodes) if "lundi" in p.lower()), 0)
                         choix_jour = st.selectbox("📅 Choisir le jour à afficher :", périodes, index=idx)
                         df = df[df['jour'] == choix_jour]
                     else:
                         st.warning("⚠️ Colonne 'jour_semaine' vide.")
 
-                # 4. Nettoyage & Parsing
-                # Remplacer vide par "Non ouverte" (pour le Rouge)
+                # 5. Nettoyage & Parsing
                 df["frequentation"] = df["frequentation"].fillna("Non ouverte").replace("", "Non ouverte")
                 
                 # Parsing horaires
                 parsed = df['tranche_horaire'].apply(lambda x: pd.Series(parser_horaires_robust(str(x))))
                 parsed.columns = ['heure_debut', 'heure_fin', 'duree_heures']
+                
+                # Fusion propre (concat peut créer des doublons d'index, on reset avant)
+                df = df.reset_index(drop=True)
                 df = pd.concat([df, parsed], axis=1)
                 
                 # Garder uniquement les durées valides
@@ -560,27 +568,20 @@ with tab_stats:
                 if not df_clean.empty:
                     st.write(f"### 🟢 Répartition de la charge ({choix_jour})")
                     
-                    # --- CONFIGURATION COULEURS DEMANDÉE ---
+                    # Configuration Couleurs
                     dom = ['Faible', 'Moyenne', 'Forte', 'Non ouverte']
-                    rng = [
-                        '#2ecc71', # Vert (Faible)
-                        '#f1c40f', # Jaune (Moyenne)
-                        '#8e44ad', # Violet (Forte - demandé pour contraste)
-                        '#FF0000'  # ROUGE (Non ouverte - demandé)
-                    ]
+                    rng = ['#2ecc71', '#f1c40f', '#8e44ad', '#FF0000']
 
-                    # Graphique 1 : Barres empilées
+                    # Graphique 1
                     chart = alt.Chart(df_clean).mark_bar().encode(
                         y=alt.Y('ligne', title="Ligne"),
                         x=alt.X('sum(duree_heures)', stack='normalize', axis=alt.Axis(format='%'), title="% Temps"),
-                        color=alt.Color('frequentation:N', 
-                                        scale=alt.Scale(domain=dom, range=rng),
-                                        legend=alt.Legend(title="Charge")),
+                        color=alt.Color('frequentation:N', scale=alt.Scale(domain=dom, range=rng), legend=alt.Legend(title="Charge")),
                         tooltip=['ligne', 'frequentation']
                     ).interactive()
                     st.altair_chart(chart, use_container_width=True)
                     
-                    # Graphique 2 : Planning
+                    # Graphique 2
                     st.write("### 📅 Planning Horaire")
                     heatmap = alt.Chart(df_clean).mark_rect().encode(
                         x=alt.X('heure_debut:Q', title="Heure (5h-24h)", scale=alt.Scale(domain=[5, 24])),
@@ -593,7 +594,7 @@ with tab_stats:
                 else:
                     st.warning("⚠️ Pas de données horaires valides après traitement.")
             else:
-                st.error("⚠️ Colonnes API Bus introuvables.")
+                st.error("⚠️ Colonnes API Bus manquantes ou renommées.")
                 st.write("Colonnes reçues :", df.columns.tolist())
 
         # --- CAS GÉNÉRAL (AUTRES STATS) ---
