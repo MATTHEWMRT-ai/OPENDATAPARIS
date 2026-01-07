@@ -526,7 +526,7 @@ with tab_stats:
                     st.write(f"### 🟢 Répartition de la charge ({choix_jour})")
                     
                     # Configuration Couleurs (Bien alignée avec les valeurs capitalize)
-                    dom = ['Faible', 'Moyenne', 'Forte', 'Non ouverte']
+                    dom = ['Faible', 'Moyenne', 'Haute', 'Non ouverte']
                     rng = ['#2ecc71', '#f1c40f', '#8e44ad', '#FF0000']
 
                     # Graphique 1
