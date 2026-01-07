@@ -11,7 +11,17 @@ import re
 import altair as alt
 
 # ==========================================
-# 1. CONFIGURATION (VILLES, API, MOTS-CLÉS)
+# 0. CONFIGURATION PAGE (Sidebar ouverte par défaut)
+# ==========================================
+st.set_page_config(
+    page_title="City Pulse", 
+    page_icon="🌍", 
+    layout="wide", 
+    initial_sidebar_state="expanded" # <--- Force l'ouverture de la barre latérale
+)
+
+# ==========================================
+# 1. CONFIGURATION DONNÉES
 # ==========================================
 
 CONFIG_VILLES = {
@@ -129,7 +139,7 @@ CONFIG_VILLES = {
             },
             "📊 Fréquentation Lignes (Stats uniquement)": {
                 "api_id": "mkt-frequentation-niveau-freq-max-ligne",
-                "col_titre": "ligne", # Mis à jour selon tes colonnes
+                "col_titre": "ligne",
                 "col_adresse": "tranche_horaire", 
                 "icone": "bar-chart", "couleur": "gray",
                 "infos_sup": [("frequentation", "👥 Charge"), ("tranche_horaire", "🕒 Heure")],
@@ -171,7 +181,7 @@ def moteur_recherche(requete, config):
     return ville_trouvee, cat_trouvee
 
 def parser_horaires_robust(texte_horaire):
-    """ Extrait début/fin d'un string (ex: '7h-9h') """
+    """ Extrait début/fin d'un string (ex: '7h-9h' ou '07:00:00') """
     try:
         if not isinstance(texte_horaire, str): return 0, 0, 0
         nums = [int(s) for s in re.findall(r'\d+', texte_horaire)]
@@ -192,7 +202,7 @@ def parser_horaires_robust(texte_horaire):
     return 0, 0, 0
 
 def recuperer_coordonnees(site):
-    """ Détective de coordonnées (Gère tous les formats bizarres des API) """
+    """ Détective de coordonnées (Gère tous les formats) """
     
     # 1. Format Paris "lat_lon"
     if "lat_lon" in site:
@@ -273,6 +283,8 @@ def charger_donnees(base_url, api_id, cible=500):
     url = f"{base_url}/{api_id}/records"
     tous_les_resultats = []
     
+    # Note : Si vous avez une clé API, ajoutez 'Authorization': 'Apikey VOTRE_CLE' dans headers
+    
     for offset in range(0, cible, 100):
         params = {"limit": 100, "offset": offset}
         try:
@@ -288,12 +300,6 @@ def charger_donnees(base_url, api_id, cible=500):
 # ==========================================
 # 3. INTERFACE STREAMLIT
 # ==========================================
-st.set_page_config(
-    page_title="City Pulse", 
-    page_icon="🌍", 
-    layout="wide", 
-    initial_sidebar_state="expanded"  # <--- C'est ça qui force l'ouverture
-)
 
 st.markdown("""
 <style>
@@ -410,13 +416,14 @@ if cle_unique != st.session_state.dernier_choix:
     st.session_state.dernier_choix = cle_unique
 
 with st.spinner(f"Chargement des données de {ville_actuelle}..."):
-    # Limite réduite temporairement pour éviter le blocage API (remettre à 1500 plus tard)
+    # Limite réduite à 500 pour éviter de bloquer l'API Rennes (Quota exceeded)
+    # Pour avoir tout, il faudra remettre 1500 plus tard
     limit_req = 500 if "frequentation" in config_data["api_id"] else 500
     raw_data = charger_donnees(config_ville["api_url"], config_data["api_id"], cible=limit_req)
 
 tous_resultats = raw_data if isinstance(raw_data, list) else []
 
-# --- FILTRAGE ---
+# --- FILTRAGE TEXTUEL ---
 resultats_finaux = []
 if len(tous_resultats) > 0:
     if mode_filtre and filtre_texte:
@@ -502,84 +509,78 @@ with tab_stats:
         if config_data["api_id"] == "mkt-frequentation-niveau-freq-max-ligne":
             df = pd.DataFrame(resultats_finaux)
             
-            # 1. Normalisation des noms de colonnes (tout en minuscule)
+            # 1. Normalisation noms de colonnes
             df.columns = [c.lower() for c in df.columns]
             
-            # 2. Renommage explicite basé sur vos colonnes
-            # Vos colonnes : jour_semaine, materiel, ligne, tranche_horaire, frequentation, niveau_frequentation
+            # 2. Mapping Stricte des colonnes (basé sur tes données)
+            # Tes colonnes : 'ligne', 'tranche_horaire', 'frequentation', 'jour_semaine', 'niveau_frequentation'
             
-            # On cherche la colonne qui contient le niveau de charge (priorité à 'niveau_frequentation')
+            # On cherche 'niveau_frequentation' en priorité, sinon 'frequentation'
             col_freq = "niveau_frequentation" if "niveau_frequentation" in df.columns else "frequentation"
             
-            # Dictionnaire de mappage
             map_dict = {
                 "ligne": "ligne",
                 "tranche_horaire": "tranche_horaire",
                 "jour_semaine": "jour",
                 col_freq: "frequentation"
             }
-            
-            # On vérifie que les colonnes existent bien avant de renommer
-            cols_presentes = [c for c in map_dict.keys() if c in df.columns]
-            
-            if len(cols_presentes) >= 3: # Si on a au moins ligne, horaire et freq
-                # On renomme uniquement celles qui existent
+
+            # On vérifie que les colonnes existent bien
+            cols_ok = [c for c in map_dict.keys() if c in df.columns]
+
+            if len(cols_ok) >= 3: # Si on a au moins ligne, horaire et freq
                 df = df.rename(columns={k:v for k,v in map_dict.items() if k in df.columns})
 
                 # 3. FILTRE JOUR
                 if 'jour' in df.columns:
-                    # On ne supprime rien, on garde tout
                     df['jour'] = df['jour'].fillna("Indéfini")
                     périodes = sorted(df['jour'].unique().astype(str).tolist())
                     
                     if périodes:
                         st.info("💡 Jours disponibles : " + ", ".join(périodes))
-                        # Par défaut on cherche "Lundi" ou "Semaine", sinon le premier
+                        # Cherche "Lundi" ou "Semaine" par défaut
                         idx = next((i for i, p in enumerate(périodes) if "lundi" in p.lower()), 0)
                         choix_jour = st.selectbox("📅 Choisir le jour à afficher :", périodes, index=idx)
-                        
-                        # Filtrage
                         df = df[df['jour'] == choix_jour]
                     else:
-                        st.warning("⚠️ La colonne 'jour_semaine' semble vide.")
+                        st.warning("⚠️ Colonne 'jour_semaine' vide.")
 
-                # 4. Nettoyage & Parsing des Horaires
-                # On remplit les vides par 'Non ouverte' pour qu'elles apparaissent en Rouge
+                # 4. Nettoyage & Parsing
+                # Remplacer vide par "Non ouverte" (pour le Rouge)
                 df["frequentation"] = df["frequentation"].fillna("Non ouverte").replace("", "Non ouverte")
                 
-                # Parsing robuste des horaires (ex: "07:00-09:00")
+                # Parsing horaires
                 parsed = df['tranche_horaire'].apply(lambda x: pd.Series(parser_horaires_robust(str(x))))
                 parsed.columns = ['heure_debut', 'heure_fin', 'duree_heures']
                 df = pd.concat([df, parsed], axis=1)
                 
-                # On garde uniquement ce qui a une durée valide (>0)
+                # Garder uniquement les durées valides
                 df_clean = df[df['duree_heures'] > 0].copy()
 
                 if not df_clean.empty:
                     st.write(f"### 🟢 Répartition de la charge ({choix_jour})")
                     
-                    # --- COULEURS ---
-                    # On définit l'ordre et les couleurs (Rouge pour Non ouverte)
+                    # --- CONFIGURATION COULEURS DEMANDÉE ---
                     dom = ['Faible', 'Moyenne', 'Forte', 'Non ouverte']
                     rng = [
                         '#2ecc71', # Vert (Faible)
                         '#f1c40f', # Jaune (Moyenne)
-                        '#8e44ad', # Violet (Forte)
-                        '#FF0000'  # ROUGE (Non ouverte)
+                        '#8e44ad', # Violet (Forte - demandé pour contraste)
+                        '#FF0000'  # ROUGE (Non ouverte - demandé)
                     ]
 
-                    # Graphique 1 : Barres empilées (% du temps)
+                    # Graphique 1 : Barres empilées
                     chart = alt.Chart(df_clean).mark_bar().encode(
                         y=alt.Y('ligne', title="Ligne"),
                         x=alt.X('sum(duree_heures)', stack='normalize', axis=alt.Axis(format='%'), title="% Temps"),
                         color=alt.Color('frequentation:N', 
                                         scale=alt.Scale(domain=dom, range=rng),
                                         legend=alt.Legend(title="Charge")),
-                        tooltip=['ligne', 'tranche_horaire', 'frequentation']
+                        tooltip=['ligne', 'frequentation']
                     ).interactive()
                     st.altair_chart(chart, use_container_width=True)
                     
-                    # Graphique 2 : Planning Horaire (Heatmap)
+                    # Graphique 2 : Planning
                     st.write("### 📅 Planning Horaire")
                     heatmap = alt.Chart(df_clean).mark_rect().encode(
                         x=alt.X('heure_debut:Q', title="Heure (5h-24h)", scale=alt.Scale(domain=[5, 24])),
@@ -587,17 +588,13 @@ with tab_stats:
                         y=alt.Y('ligne:N', sort='ascending'),
                         color=alt.Color('frequentation:N', scale=alt.Scale(domain=dom, range=rng)),
                         tooltip=['ligne', 'tranche_horaire', 'frequentation']
-                    ).properties(
-                        height=max(400, len(df_clean['ligne'].unique())*20) # Hauteur dynamique
-                    ).interactive()
+                    ).properties(height=max(400, len(df_clean['ligne'].unique())*20)).interactive()
                     st.altair_chart(heatmap, use_container_width=True)
                 else:
-                    st.warning("⚠️ Le tableau est vide après traitement des horaires.")
-                    st.write("Exemple de tranche horaire brute reçue :", df['tranche_horaire'].iloc[0] if not df.empty else "Aucune")
+                    st.warning("⚠️ Pas de données horaires valides après traitement.")
             else:
-                st.error("⚠️ Colonnes manquantes.")
-                st.write("Colonnes trouvées :", df.columns.tolist())
-                st.write("Colonnes attendues : ligne, tranche_horaire, niveau_frequentation")
+                st.error("⚠️ Colonnes API Bus introuvables.")
+                st.write("Colonnes reçues :", df.columns.tolist())
 
         # --- CAS GÉNÉRAL (AUTRES STATS) ---
         else:
