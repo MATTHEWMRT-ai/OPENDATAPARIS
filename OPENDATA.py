@@ -148,6 +148,65 @@ CONFIG_VILLES = {
                 "mots_cles": ["stats", "frequentation", "monde", "charge"]
             }
         }
+    },
+    "Nantes 🐘": {
+        "coords_center": [47.2184, -1.5536],
+        "zoom_start": 13,
+        "api_url": "https://data.nantesmetropole.fr/api/explore/v2.1/catalog/datasets",
+        "cp_prefix": "44",
+        "alias": ["nantes", "naoned", "44"],
+        "categories": {
+            "🎉 Salles à Louer": {
+                "api_id": "244400404_salles-nantes-disponibles-location",
+                "col_titre": "nom_salle", "col_adresse": "adresse",
+                "icone": "building", "couleur": "orange",
+                "infos_sup": [("telephone", "📞 Tél"), ("surface", "📐 Surface (m²)")],
+                "mots_cles": ["salle", "fete", "location", "mariage"]
+            },
+            "🏊 Piscines": {
+                "api_id": "244400404_piscines-nantes-metropole",
+                "col_titre": "libelle", "col_adresse": "adresse",
+                "icone": "swimmer", "couleur": "blue",
+                "infos_sup": [("telephone", "📞 Tél"), ("horaires_periode_scolaire", "🕒 Horaires")],
+                "mots_cles": ["piscine", "nage", "sport", "eau"]
+            },
+            "🚲 Bicloo (Stations Vélos)": {
+                "api_id": "244400404_stations-velos-libre-service-nantes-metropole",
+                "col_titre": "nom", "col_adresse": "adresse",
+                "icone": "bicycle", "couleur": "red",
+                "infos_sup": [("status", "✅ État"), ("bike_stands", "🅿️ Bornes")],
+                "mots_cles": ["velo", "bicloo", "cyclisme", "transport"]
+            },
+            "❤️ Défibrillateurs": {
+                "api_id": "244400404_defibrillateurs-nantes",
+                "col_titre": "nom_site", "col_adresse": "adresse",
+                "icone": "heartbeat", "couleur": "green",
+                "infos_sup": [("acces", "🚪 Accès"), ("emplacement", "📍 Emplacement")],
+                "mots_cles": ["sante", "urgence", "coeur", "secours"]
+            },
+            "🅿️ Parcs Relais (Dispo)": {
+                "api_id": "244400404_parcs-relais-nantes-metropole-disponibilites",
+                "col_titre": "nom_du_parc", "col_adresse": "adresse",
+                "icone": "parking", "couleur": "purple",
+                "infos_sup": [("grp_disponible", "🟢 Places Dispo"), ("grp_exploitation", "🔢 Total")],
+                "mots_cles": ["parking", "voiture", "tan", "stationnement"]
+            },
+            "🛜 WiFi Public Extérieur": {
+                "api_id": "244400404_wifi-public-exterieur-nantes-metropole",
+                "col_titre": "nom", "col_adresse": "adresse",
+                "icone": "wifi", "couleur": "cadetblue",
+                "infos_sup": [("etat", "✅ État"), ("localisation", "📍 Lieu")],
+                "mots_cles": ["wifi", "internet", "web", "connexion"]
+            },
+            "📅 Agenda & Événements": {
+                "api_id": "244400404_agenda-evenements-nantes-metropole_v2",
+                "col_titre": "nom", "col_adresse": "lieu",
+                "icone": "calendar", "couleur": "pink",
+                "infos_sup": [("date", "📅 Date"), ("rubrique", "🏷️ Type"), ("description", "ℹ️ Info")],
+                "image_col": "media_1",
+                "mots_cles": ["sortie", "evenement", "culture", "concert"]
+            }
+        }
     }
 }
 
