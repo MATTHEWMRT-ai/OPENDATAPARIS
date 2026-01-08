@@ -158,11 +158,9 @@ CONFIG_VILLES = {
         "categories": {
             "🎉 Salles à Louer": {
                 "api_id": "244400404_salles-nantes-disponibles-location",
-                # Adaptation aux colonnes de ton image (souvent en snake_case via API)
                 "col_titre": "nom_de_la_salle", 
                 "col_adresse": "adresse",
                 "icone": "building", "couleur": "orange",
-                # Infos précises basées sur ton image
                 "infos_sup": [
                     ("telephone", "📞 Tél"), 
                     ("web", "🌐 Web"), 
@@ -261,10 +259,15 @@ def convert_time_to_float(time_str):
 
 def recuperer_coordonnees(site):
     """ 
-    Détective de coordonnées amélioré pour Nantes 
-    Supporte lat/lon séparés et chaines "lat, lon"
+    Détective de coordonnées amélioré 
     """
-    # 1. Cas : Colonnes séparées (visible sur ton image)
+    # 0. NOUVEAU : Cas spécifique Nantes (colonne "location" format dict)
+    if "location" in site:
+        loc = site["location"]
+        if isinstance(loc, dict): 
+            return loc.get("lat"), loc.get("lon")
+
+    # 1. Cas : Colonnes séparées
     if "latitude" in site and "longitude" in site:
         try:
             return float(site["latitude"]), float(site["longitude"])
@@ -278,14 +281,12 @@ def recuperer_coordonnees(site):
         g = site["geo"]
         if isinstance(g, dict): return g.get("lat"), g.get("lon")
         
-    # 3. Cas : Champ texte "47.2..., -1.5..." (visible colonne Géolocalisation image)
+    # 3. Cas : Champ texte
     for cle in ["geolocalisation", "coordonnees", "geo_point_2d"]:
         val = site.get(cle)
         if val:
-            # Si c'est un dictionnaire ou liste
             if isinstance(val, dict): return val.get("lat"), val.get("lon")
             if isinstance(val, list) and len(val) == 2: return val[0], val[1]
-            # Si c'est une chaine de caractères "lat, lon"
             if isinstance(val, str) and "," in val:
                 try:
                     parts = val.split(",")
