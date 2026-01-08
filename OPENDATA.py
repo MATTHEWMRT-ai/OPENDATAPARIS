@@ -41,56 +41,56 @@ CONFIG_VILLES = {
                 "image_col": "cover_url",
                 "mots_cles": ["sorties", "evenements", "concert", "expo", "culture"]
             },
-            "Bornes Wi-Fi": {
+            "🛜 Bornes Wi-Fi": {
                 "api_id": "sites-disposant-du-service-paris-wi-fi",
                 "col_titre": "nom_site", "col_adresse": "arc_adresse",
                 "icone": "wifi", "couleur": "purple", 
                 "infos_sup": [("etat2", "✅ État"), ("cp", "📮 CP")],
                 "mots_cles": ["wifi", "internet", "web"]
             },
-            "Sanisettes (Toilettes)": {
+            "🚽 Sanisettes (Toilettes)": {
                 "api_id": "sanisettesparis",
                 "col_titre": "libelle", "col_adresse": "adresse",
                 "icone": "tint", "couleur": "blue", 
                 "infos_sup": [("horaire", "🕒 Horaires"), ("acces_pmr", "♿ PMR")],
                 "mots_cles": ["toilettes", "wc", "pipi"]
             },
-            "Fontaines à boire": {
+            "⛲️ Fontaines à boire": {
                 "api_id": "fontaines-a-boire",
                 "col_titre": "voie", "col_adresse": "commune",
                 "icone": "glass", "couleur": "cadetblue", 
                 "infos_sup": [("dispo", "💧 Dispo"), ("type_objet", "⚙️ Type")],
                 "mots_cles": ["eau", "boire", "fontaine"]
             },
-            "Chantiers Perturbants": {
+            "🏗️ Chantiers Perturbants": {
                 "api_id": "chantiers-perturbants",
                 "col_titre": "objet", "col_adresse": "voie",
                 "icone": "exclamation-triangle", "couleur": "red", 
                 "infos_sup": [("date_fin", "📅 Fin"), ("impact_circulation", "🚗 Impact")],
                 "mots_cles": ["travaux", "chantier", "route"]
             },
-            "Laboratoires d'Analyses": {
+            "🔬 Laboratoires d'Analyses": {
                 "api_id": "laboratoires-danalyses-medicales",
                 "col_titre": "laboratoire", "col_adresse": "adresse",
                 "icone": "flask", "couleur": "green", 
                 "infos_sup": [("telephone", "📞 Tél"), ("horaires", "🕒 Horaires")],
                 "mots_cles": ["sante", "medecin", "laboratoire"]
             },
-            "Défibrillateurs": {
+            "🆘 Défibrillateurs": {
                 "api_id": "defibrillateurs",
                 "col_titre": "nom_etabl", "col_adresse": "adr_post",
                 "icone": "heartbeat", "couleur": "darkred", 
                 "infos_sup": [("acces_daw", "🚪 Accès")],
                 "mots_cles": ["coeur", "defibrillateur", "urgence"]
             },
-            "Collèges": {
+            "🏫 Collèges": {
                 "api_id": "etablissements-scolaires-colleges",
                 "col_titre": "libelle", "col_adresse": "adresse",
                 "icone": "graduation-cap", "couleur": "darkblue", 
                 "infos_sup": [("public_prive", "🏫 Secteur")],
                 "mots_cles": ["ecole", "college", "education"]
             },
-            "Écoles Maternelles": {
+            "🎓 Écoles Maternelles": {
                 "api_id": "etablissements-scolaires-maternelles",
                 "col_titre": "libelle", "col_adresse": "adresse",
                 "icone": "child", "couleur": "pink", 
