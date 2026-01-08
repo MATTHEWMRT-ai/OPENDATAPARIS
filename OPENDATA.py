@@ -158,10 +158,26 @@ CONFIG_VILLES = {
         "categories": {
             "🎉 Salles à Louer": {
                 "api_id": "244400404_salles-nantes-disponibles-location",
-                "col_titre": "nom_salle", "col_adresse": "adresse",
+                # Adaptation aux colonnes de ton image (souvent en snake_case via API)
+                "col_titre": "nom_de_la_salle", 
+                "col_adresse": "adresse",
                 "icone": "building", "couleur": "orange",
-                "infos_sup": [("telephone", "📞 Tél"), ("surface", "📐 Surface (m²)")],
+                # Infos précises basées sur ton image
+                "infos_sup": [
+                    ("telephone", "📞 Tél"), 
+                    ("web", "🌐 Web"), 
+                    ("surface_de_la_salle", "📐 Surface (m²)"),
+                    ("capacite_reunion", "👥 Capacité")
+                ],
                 "mots_cles": ["salle", "fete", "location", "mariage"]
+            },
+            "📅 Agenda & Événements": {
+                "api_id": "244400404_agenda-evenements-nantes-metropole_v2",
+                "col_titre": "nom", "col_adresse": "lieu",
+                "icone": "calendar", "couleur": "pink",
+                "infos_sup": [("date", "📅 Date"), ("rubrique", "🏷️ Type"), ("description", "ℹ️ Info")],
+                "image_col": "media_1",
+                "mots_cles": ["sortie", "evenement", "culture", "concert"]
             },
             "🏊 Piscines": {
                 "api_id": "244400404_piscines-nantes-metropole",
@@ -197,14 +213,6 @@ CONFIG_VILLES = {
                 "icone": "wifi", "couleur": "cadetblue",
                 "infos_sup": [("etat", "✅ État"), ("localisation", "📍 Lieu")],
                 "mots_cles": ["wifi", "internet", "web", "connexion"]
-            },
-            "📅 Agenda & Événements": {
-                "api_id": "244400404_agenda-evenements-nantes-metropole_v2",
-                "col_titre": "nom", "col_adresse": "lieu",
-                "icone": "calendar", "couleur": "pink",
-                "infos_sup": [("date", "📅 Date"), ("rubrique", "🏷️ Type"), ("description", "ℹ️ Info")],
-                "image_col": "media_1",
-                "mots_cles": ["sortie", "evenement", "culture", "concert"]
             }
         }
     }
@@ -241,47 +249,55 @@ def moteur_recherche(requete, config):
     return ville_trouvee, cat_trouvee
 
 def convert_time_to_float(time_str):
-    """
-    Convertit 'HH:MM' en float (heures).
-    Gère la nuit : 00:30 devient 24.5 pour faciliter le tri chronologique.
-    """
     try:
         if not isinstance(time_str, str): return None
         parts = time_str.split(':')
         h = int(parts[0])
         m = int(parts[1])
-        # Logique de nuit : on considère que la journée de transport va jusqu'à 4h du matin
-        if h < 4: 
-            h += 24
+        if h < 4: h += 24
         return h + (m / 60.0)
     except:
         return None
 
 def recuperer_coordonnees(site):
-    """ Détective de coordonnées (Gère tous les formats) """
+    """ 
+    Détective de coordonnées amélioré pour Nantes 
+    Supporte lat/lon séparés et chaines "lat, lon"
+    """
+    # 1. Cas : Colonnes séparées (visible sur ton image)
+    if "latitude" in site and "longitude" in site:
+        try:
+            return float(site["latitude"]), float(site["longitude"])
+        except: pass
+        
+    # 2. Cas : Objet lat_lon ou geo
     if "lat_lon" in site:
         ll = site["lat_lon"]
         if isinstance(ll, dict): return ll.get("lat"), ll.get("lon")
     if "geo" in site:
         g = site["geo"]
         if isinstance(g, dict): return g.get("lat"), g.get("lon")
-        if isinstance(g, list) and len(g) == 2: return g[0], g[1]
-    if "coordonnees" in site:
-        c = site["coordonnees"]
-        if isinstance(c, dict): return c.get("lat"), c.get("lon")
-        if isinstance(c, list) and len(c) == 2: return c[0], c[1]
+        
+    # 3. Cas : Champ texte "47.2..., -1.5..." (visible colonne Géolocalisation image)
+    for cle in ["geolocalisation", "coordonnees", "geo_point_2d"]:
+        val = site.get(cle)
+        if val:
+            # Si c'est un dictionnaire ou liste
+            if isinstance(val, dict): return val.get("lat"), val.get("lon")
+            if isinstance(val, list) and len(val) == 2: return val[0], val[1]
+            # Si c'est une chaine de caractères "lat, lon"
+            if isinstance(val, str) and "," in val:
+                try:
+                    parts = val.split(",")
+                    return float(parts[0].strip()), float(parts[1].strip())
+                except: pass
+
+    # 4. Cas : Geometry GeoJSON
     geom = site.get("geometry")
     if geom and isinstance(geom, dict) and geom.get("type") == "Point":
         coords = geom.get("coordinates")
         if coords and len(coords) == 2: return coords[1], coords[0] 
-    if "geo_point_2d" in site:
-        geo = site["geo_point_2d"]
-        if isinstance(geo, dict): return geo.get("lat"), geo.get("lon")
-        if isinstance(geo, list) and len(geo) == 2: return geo[0], geo[1]
-    geoloc = site.get("geolocalisation")
-    if geoloc:
-        if isinstance(geoloc, dict): return geoloc.get("lat"), geoloc.get("lon")
-        if isinstance(geoloc, list) and len(geoloc) == 2: return geoloc[0], geoloc[1]
+        
     return None, None
 
 def extraire_cp_intelligent(site_data, col_adresse_config, prefixe_cp="75"):
@@ -522,7 +538,7 @@ if tab_carte:
         if coords_heatmap or style_vue == "📍 Points":
             st_folium(m, width=1000, height=600, returned_objects=[])
         else:
-            st.warning("⚠️ Aucune coordonnée GPS trouvée (Vérifiez les données brutes).")
+            st.warning("⚠️ Aucune coordonnée GPS trouvée (Vérifiez les données brutes dans l'onglet Données).")
 
 with tab_stats:
     st.subheader(f"📊 Analyse : {ville_actuelle}")
@@ -617,8 +633,6 @@ with tab_stats:
                     # Graphique 2 : Planning (GANTT PLEIN)
                     st.write("### 📅 Planning Horaire")
                     
-                    # Pour l'affichage, on remet les heures > 24h au format 0-24h si on veut, 
-                    # mais Altair gère bien les axes continus. On va juste borner l'axe X.
                     heatmap = alt.Chart(df_clean).mark_rect().encode(
                         x=alt.X('heure_debut:Q', title="Heure (5h - 01h+)", scale=alt.Scale(domain=[4, 28])),
                         x2='heure_fin:Q',
