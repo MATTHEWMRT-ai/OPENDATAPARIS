@@ -74,7 +74,7 @@ CONFIG_VILLES = {
                 "col_titre": "laboratoire", "col_adresse": "adresse",
                 "icone": "flask", "couleur": "green", 
                 "infos_sup": [("telephone", "📞 Tél"), ("horaires", "🕒 Horaires")],
-                "mots_cles": ["sante", "medecin", "laboratoire"]
+                "mots_cles": ["sante", "medecin", "laboratoire","MST"]
             },
             "🆘 Défibrillateurs": {
                 "api_id": "defibrillateurs",
@@ -88,7 +88,7 @@ CONFIG_VILLES = {
                 "col_titre": "libelle", "col_adresse": "adresse",
                 "icone": "graduation-cap", "couleur": "darkblue", 
                 "infos_sup": [("public_prive", "🏫 Secteur")],
-                "mots_cles": ["ecole", "college", "education"]
+                "mots_cles": ["college", "education"]
             },
             "🎓 Écoles Maternelles": {
                 "api_id": "etablissements-scolaires-maternelles",
@@ -196,14 +196,14 @@ CONFIG_VILLES = {
                 "col_titre": "nom_site", "col_adresse": "adresse",
                 "icone": "heartbeat", "couleur": "green",
                 "infos_sup": [("acces", "🚪 Accès"), ("emplacement", "📍 Emplacement")],
-                "mots_cles": ["sante", "urgence", "coeur", "secours"]
+                "mots_cles": ["sante", "urgence", "coeur", "secours","défibrilateur"]
             },
             "🅿️ Parcs Relais (Dispo)": {
                 "api_id": "244400404_parcs-relais-nantes-metropole-disponibilites",
                 "col_titre": "nom_du_parc", "col_adresse": "adresse",
                 "icone": "parking", "couleur": "purple",
                 "infos_sup": [("grp_disponible", "🟢 Places Dispo"), ("grp_exploitation", "🔢 Total")],
-                "mots_cles": ["parking", "voiture", "tan", "stationnement"]
+                "mots_cles": ["parking", "voiture", "tan", "stationnement","garer"]
             },
             "🛜 WiFi Public Extérieur": {
                 "api_id": "244400404_wifi-public-exterieur-nantes-metropole",
