@@ -1,7 +1,6 @@
 import streamlit as st
 from streamlit_folium import st_folium
 import folium
-from folium.plugins import HeatMap
 import requests
 import pandas as pd
 import altair as alt
@@ -23,7 +22,7 @@ st.set_page_config(
 # Mots-clés pour classer les datasets
 CATEGORIES_RULES = {
     "🚲 Mobilité": ["velo", "cyclab", "bicloo", "trottinette", "stationnement", "parking", "metro", "bus", "tram", "transport", "gare", "pieton", "sncf"],
-    "🎭 Culture & Sorties": ["cinema", "theatre", "musee", "culture", "bibliotheque", "exposition", "agenda", "evenement", "patrimoine", "concert", "visite"],
+    "🎭 Culture & Sorties": ["cinema", "theatre", "musee", "culture", "bibliotheque", "exposition", "agenda", "evenement", "patrimoine", "concert", "visite", "tourisme"],
     "🌳 Nature & Cadre de vie": ["jardin", "parc", "arbre", "eau", "fontaine", "dechet", "proprete", "tri", "banc", "toilette", "caniparc", "vert"],
     "🏫 Services Publics": ["ecole", "creche", "college", "lycee", "administration", "public", "mairie", "vote", "election", "citoyen", "organisme"],
     "🏥 Santé & Social": ["sante", "hopital", "medecin", "pharmacie", "defibrillateur", "social", "handicap", "accessibilite", "urgence", "aide"]
@@ -108,7 +107,7 @@ def analyser_structure_dataset(dataset_item):
     metas = dataset_item.get("metas", {}).get("default", {})
     titre_ds = metas.get("title", dataset_item.get("dataset_id"))
     mots_cles = metas.get("keyword", []) 
-    if mots_cles is None: mots_cles = [] # Sécurité si null
+    if mots_cles is None: mots_cles = [] 
     
     texte_analyse = f"{titre_ds} {' '.join(mots_cles)}"
     icone, couleur = detecter_style(texte_analyse)
@@ -155,6 +154,11 @@ VILLES_CONFIG = {
         "api_url": "https://data.strasbourg.eu/api/explore/v2.1",
         "coords": [48.5734, 7.7521],
         "zoom": 13
+    },
+    "Bordeaux 🍷": {
+        "api_url": "https://opendata.bordeaux-metropole.fr/api/explore/v2.1",
+        "coords": [44.8377, -0.5791],
+        "zoom": 13
     }
 }
 
@@ -200,7 +204,7 @@ def scanner_catalogue(api_base_url):
             catalogue_organise[cat][config["titre_dataset"]] = config
             
     if found_count == 0 and len(results) > 0:
-        st.warning("⚠️ Des données existent, mais aucune n'a de coordonnées GPS exploitables pour une carte.")
+        st.warning("⚠️ Des données ont été reçues, mais aucune n'a de coordonnées GPS exploitables.")
             
     return catalogue_organise
 
@@ -347,15 +351,30 @@ with tab_stats:
         with col1: st.metric("Nombre d'éléments", len(df))
         with col2: st.metric("Colonnes", len(df.columns))
             
-        # Graphique automatique sur les champs texte courts (catégories)
-        cat_cols = [c for c in df.columns if df[c].dtype == 'object' and df[c].nunique() < 15]
+        # --- ANALYSE STATISTIQUE ROBUSTE ---
+        # On ne garde que les colonnes simples (textes/nombres) pour éviter le crash sur les listes
+        cat_cols = []
+        for c in df.columns:
+            if df[c].dtype == 'object':
+                try:
+                    # On convertit tout en string pour vérifier les doublons sans planter sur les listes
+                    if df[c].astype(str).nunique() < 15:
+                        cat_cols.append(c)
+                except:
+                    continue # On ignore la colonne si elle est trop complexe
+
         if cat_cols:
             st.subheader("Distribution automatique")
             c_g = st.selectbox("Grouper par :", cat_cols)
-            chart = alt.Chart(df).mark_bar().encode(
-                x=alt.X(c_g, sort='-y', axis=alt.Axis(labelLimit=200)),
-                y='count()',
-                color=c_g,
+            
+            # Copie propre pour le graphique convertie en texte
+            df_chart = df.copy()
+            df_chart[c_g] = df_chart[c_g].astype(str)
+            
+            chart = alt.Chart(df_chart).mark_bar().encode(
+                x=alt.X(c_g, sort='-y', axis=alt.Axis(labelLimit=200), title=c_g),
+                y=alt.Y('count()', title="Nombre"),
+                color=alt.Color(c_g, legend=None),
                 tooltip=[c_g, 'count()']
             ).interactive()
             st.altair_chart(chart, use_container_width=True)
