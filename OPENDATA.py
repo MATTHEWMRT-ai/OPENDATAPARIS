@@ -7,7 +7,6 @@ from gtts import gTTS
 import base64
 import time
 import pandas as pd
-import re
 import altair as alt
 
 # ==========================================
@@ -21,40 +20,40 @@ st.set_page_config(
 )
 
 # ==========================================
-# 1. INTELLIGENCE ARTIFICIELLE (Heuristiques)
+# 1. INTELLIGENCE (Heuristiques & Classification)
 # ==========================================
 
-# Mots-clés pour classer les datasets dans des catégories
+# Mots-clés pour classer les datasets
 CATEGORIES_RULES = {
-    "🚲 Mobilité": ["velo", "cyclab", "bicloo", "trottinette", "stationnement", "parking", "metro", "bus", "tram", "transport", "gare"],
-    "🎭 Culture & Sorties": ["cinema", "theatre", "musee", "culture", "bibliotheque", "exposition", "agenda", "evenement", "patrimoine"],
-    "🌳 Nature & Cadre de vie": ["jardin", "parc", "arbre", "eau", "fontaine", "dechet", "proprete", "tri", "banc", "toilette"],
-    "🏫 Services Publics": ["ecole", "creche", "college", "lycee", "administration", "public", "mairie", "vote", "election"],
-    "🏥 Santé & Social": ["sante", "hopital", "medecin", "pharmacie", "defibrillateur", "social", "handicap", "accessibilite"]
+    "🚲 Mobilité": ["velo", "cyclab", "bicloo", "trottinette", "stationnement", "parking", "metro", "bus", "tram", "transport", "gare", "pieton"],
+    "🎭 Culture & Sorties": ["cinema", "theatre", "musee", "culture", "bibliotheque", "exposition", "agenda", "evenement", "patrimoine", "concert"],
+    "🌳 Nature & Cadre de vie": ["jardin", "parc", "arbre", "eau", "fontaine", "dechet", "proprete", "tri", "banc", "toilette", "caniparc"],
+    "🏫 Services Publics": ["ecole", "creche", "college", "lycee", "administration", "public", "mairie", "vote", "election", "citoyen"],
+    "🏥 Santé & Social": ["sante", "hopital", "medecin", "pharmacie", "defibrillateur", "social", "handicap", "accessibilite", "urgence"]
 }
 
-# Mapping Mots-clés -> Icônes FontAwesome (v4) + Couleurs
+# Mapping Mots-clés -> Icônes FontAwesome & Couleurs
 ICON_RULES = [
     (["parking", "stationnement"], "parking", "blue"),
     (["velo", "cycliste", "bicloo"], "bicycle", "red"),
     (["bus", "tram", "metro", "transport"], "bus", "cadetblue"),
     (["parc", "jardin", "arbre"], "tree", "green"),
     (["eau", "fontaine", "piscine"], "tint", "lightblue"),
-    (["toilette", "sanisette"], "venus-mars", "gray"),
+    (["toilette", "sanisette", "wc"], "venus-mars", "gray"),
     (["wifi", "internet"], "wifi", "purple"),
     (["musee", "art", "culture"], "paint-brush", "orange"),
     (["ecole", "college", "enseignement"], "graduation-cap", "pink"),
-    (["sante", "defibrillateur", "hopital"], "heartbeat", "darkred"),
+    (["sante", "defibrillateur", "hopital", "secours"], "heartbeat", "darkred"),
     (["poubelle", "dechet", "tri"], "trash", "darkgreen"),
 ]
 
 def detecter_style(texte_analyse):
-    """Devine l'icône et la couleur basées sur le texte (titre + tags)"""
+    """Devine l'icône et la couleur basées sur le texte"""
     texte = texte_analyse.lower()
     for mots_cles, icone, couleur in ICON_RULES:
         if any(mot in texte for mot in mots_cles):
             return icone, couleur
-    return "map-marker", "blue" # Défaut
+    return "map-marker", "blue"
 
 def detecter_categorie(texte_analyse):
     """Devine la catégorie"""
@@ -66,39 +65,38 @@ def detecter_categorie(texte_analyse):
 
 def analyser_structure_dataset(dataset_item):
     """
-    Analyse les champs (fields) pour identifier titre, adresse et géo.
-    Retourne une config ou None si pas de géolocalisation.
+    Analyse les champs pour trouver Titre, Adresse et Géolocalisation.
     """
     fields = dataset_item.get("fields", [])
     field_names = [f["name"] for f in fields]
     
-    # 1. Vérification Géolocalisation (CRITIQUE)
+    # 1. Vérification Géolocalisation
     col_geo = None
-    # Priorité 1 : Champ type geo_point_2d (Standard Opendatasoft)
+    # Priorité 1 : Champ type geo_point_2d
     for f in fields:
         if f["type"] == "geo_point_2d":
             col_geo = f["name"]
             break
     
-    # Priorité 2 : Recherche de lat/lon séparés
+    # Priorité 2 : Recherche lat/lon
     if not col_geo:
         has_lat = any(x in field_names for x in ["lat", "latitude", "y_wgs84"])
         has_lon = any(x in field_names for x in ["lon", "long", "longitude", "x_wgs84"])
         if has_lat and has_lon:
-            col_geo = "AUTO_DETECT_LAT_LON" # Marqueur spécial
+            col_geo = "AUTO_DETECT_LAT_LON"
             
     if not col_geo:
-        return None # Pas de carte possible, on ignore ce dataset
+        return None # Ignore le dataset si pas de carte possible
 
-    # 2. Détection Titre (Heuristique)
+    # 2. Détection Titre
     col_titre = None
     scores_titre = ["nom", "titre", "libelle", "intitule", "name", "label", "id"]
     for candidat in scores_titre:
         found = [n for n in field_names if candidat in n.lower()]
         if found:
-            col_titre = found[0] # Le plus court ou le premier qui match
+            col_titre = found[0]
             break
-    if not col_titre: col_titre = field_names[0] # Fallback
+    if not col_titre: col_titre = field_names[0]
 
     # 3. Détection Adresse
     col_adresse = None
@@ -109,12 +107,15 @@ def analyser_structure_dataset(dataset_item):
             col_adresse = found[0]
             break
             
-    # 4. Métadonnées pour le style
+    # 4. Métadonnées
     metas = dataset_item.get("metas", {}).get("default", {})
     titre_ds = metas.get("title", dataset_item.get("dataset_id"))
-    mots_cles = metas.get("keyword", [])
-    texte_analyse = f"{titre_ds} {' '.join(mots_cles)}"
+    mots_cles = metas.get("keyword", []) if metas.get("keyword") else []
     
+    # Si mots_cles est None, on remplace par vide
+    if mots_cles is None: mots_cles = []
+    
+    texte_analyse = f"{titre_ds} {' '.join(mots_cles)}"
     icone, couleur = detecter_style(texte_analyse)
     cat = detecter_categorie(texte_analyse)
 
@@ -124,14 +125,14 @@ def analyser_structure_dataset(dataset_item):
         "categorie": cat,
         "col_titre": col_titre,
         "col_adresse": col_adresse,
-        "col_geo": col_geo, # Nom de la colonne geo ou "AUTO_DETECT..."
+        "col_geo": col_geo,
         "icone": icone,
         "couleur": couleur,
-        "infos_sup": field_names[:5] # On garde les 5 premières colonnes pour l'info bulle
+        "infos_sup": field_names[:6] # On garde quelques colonnes pour l'info
     }
 
 # ==========================================
-# 2. CONFIGURATION API & FONCTIONS
+# 2. CONFIGURATION API & FONCTIONS BACKEND
 # ==========================================
 
 VILLES_CONFIG = {
@@ -157,62 +158,75 @@ VILLES_CONFIG = {
     }
 }
 
+# HEADERS pour éviter les erreurs 403 (Interdit)
+HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+}
+
 @st.cache_data(ttl=3600)
 def scanner_catalogue(api_base_url):
-    """Récupère les datasets populaires et construit la config dynamique"""
+    """Scanne le catalogue avec gestion d'erreurs robuste"""
     url = f"{api_base_url}/catalog/datasets"
-    # On prend les 60 datasets les plus populaires (records_count desc)
     params = {"limit": 60, "order_by": "metas.records_count desc"}
     
     try:
-        r = requests.get(url, params=params).json()
-        raw_datasets = r.get("results", [])
-    except:
+        # verify=False est utile si tu as des erreurs SSL (réseau entreprise/école)
+        # Mais attention, cela affiche un warning dans la console
+        r = requests.get(url, params=params, headers=HEADERS, timeout=10)
+        r.raise_for_status()
+        results = r.json().get("results", [])
+    except requests.exceptions.RequestException as e:
+        st.error(f"❌ Erreur connexion API : {e}")
         return {}
 
     catalogue_organise = {}
+    found_count = 0
     
-    for ds in raw_datasets:
+    for ds in results:
         config = analyser_structure_dataset(ds)
         if config:
+            found_count += 1
             cat = config["categorie"]
             if cat not in catalogue_organise:
                 catalogue_organise[cat] = {}
-            # On utilise le titre comme clé
             catalogue_organise[cat][config["titre_dataset"]] = config
+            
+    if found_count == 0 and len(results) > 0:
+        st.warning("⚠️ Données reçues mais aucune colonne GPS trouvée (lat/lon ou geo_point).")
             
     return catalogue_organise
 
-@st.cache_data
+@st.cache_data(ttl=600)
 def charger_donnees_api(api_base_url, dataset_id):
+    """Charge les données du dataset choisi"""
     url = f"{api_base_url}/catalog/datasets/{dataset_id}/records"
-    params = {"limit": 100} # Limite à 100 pour la rapidité de démo
+    params = {"limit": 100}
     try:
-        r = requests.get(url, params=params).json()
-        return r.get("results", [])
-    except:
+        r = requests.get(url, params=params, headers=HEADERS, timeout=10)
+        r.raise_for_status()
+        return r.json().get("results", [])
+    except Exception as e:
+        st.error(f"Erreur chargement données : {e}")
         return []
 
 def recuperer_gps(item, col_geo):
-    """Extrait latitude/longitude peu importe le format"""
+    """Extrait latitude/longitude proprement"""
     lat, lon = None, None
     
-    # Cas 1 : Colonne GeoJSON/GeoPoint spécifique
+    # Cas 1 : Colonne GeoJSON/GeoPoint
     if col_geo and col_geo != "AUTO_DETECT_LAT_LON":
         val = item.get(col_geo)
         if isinstance(val, dict):
             lat, lon = val.get("lat"), val.get("lon")
-            if not lat: # Parfois format geometry
+            if not lat and "geometry" in val:
                 coords = val.get("geometry", {}).get("coordinates")
-                if coords: lon, lat = coords # GeoJSON est souvent Lon, Lat
+                if coords: lon, lat = coords
                 
-    # Cas 2 : Auto détection lat/lon dans les colonnes
+    # Cas 2 : Auto détection
     if not lat:
-        # On cherche brutalement dans les clés
         keys = item.keys()
         k_lat = next((k for k in keys if k in ["lat", "latitude", "y_wgs84"]), None)
         k_lon = next((k for k in keys if k in ["lon", "long", "longitude", "x_wgs84"]), None)
-        
         if k_lat and k_lon:
             try:
                 lat = float(item[k_lat])
@@ -220,13 +234,6 @@ def recuperer_gps(item, col_geo):
             except: pass
             
     return lat, lon
-
-def jouer_son(texte):
-    try:
-        # Simplifié pour éviter les erreurs de fichier
-        b64 = base64.b64encode(gTTS(text=texte, lang='fr').save("temp.mp3") or open("temp.mp3", "rb").read()).decode()
-        st.sidebar.markdown(f'<audio autoplay><source src="data:audio/mp3;base64,{b64}"></audio>', unsafe_allow_html=True)
-    except: pass
 
 # ==========================================
 # 3. INTERFACE STREAMLIT
@@ -244,11 +251,11 @@ with st.sidebar:
     st.divider()
     
     # SCAN DU CATALOGUE
-    with st.spinner(f"📡 Scan des satellites au dessus de {ville_nom}..."):
+    with st.spinner(f"📡 Scan des données de {ville_nom}..."):
         catalogue = scanner_catalogue(ville_conf["api_url"])
     
     if not catalogue:
-        st.error("Erreur de connexion à l'API ou pas de données géo trouvées.")
+        st.error("Impossible de récupérer le catalogue. Vérifiez votre connexion.")
         st.stop()
         
     st.header("2. Les Données")
@@ -261,21 +268,22 @@ with st.sidebar:
     datasets_dispo = catalogue[cat_choisie]
     dataset_nom = st.selectbox("Jeu de données :", list(datasets_dispo.keys()))
     
-    # Config finale récupérée
+    # Config finale
     config_dataset = datasets_dispo[dataset_nom]
     
-    st.info(f"📍 Colonne géo détectée : `{config_dataset['col_geo']}`")
-    st.info(f"🎨 Style auto : {config_dataset['icone']} ({config_dataset['couleur']})")
+    st.info(f"📍 Géolocalisation : `{config_dataset['col_geo']}`")
+    st.success(f"🎨 Style détecté : {config_dataset['icone']}")
 
     st.divider()
     activer_filtre = st.toggle("Activer filtre texte")
+    txt_filtre = ""
     if activer_filtre:
-        txt_filtre = st.text_input("Filtrer par mot-clé :")
+        txt_filtre = st.text_input("Recherche (ex: Centre, Gare...) :")
 
 # --- MAIN ---
 
-# Chargement Données
-with st.spinner("Téléchargement des données..."):
+# Chargement
+with st.spinner("Récupération des points..."):
     data = charger_donnees_api(ville_conf["api_url"], config_dataset["api_id"])
 
 # Filtrage
@@ -287,31 +295,30 @@ if activer_filtre and txt_filtre:
 else:
     data_finale = data
 
-st.success(f"✅ {len(data_finale)} éléments chargés pour : {dataset_nom}")
+st.markdown(f"### {config_dataset['icone']} {dataset_nom} ({len(data_finale)} résultats)")
 
 # Onglets
-tab_map, tab_stats, tab_raw = st.tabs(["🗺️ Carte Interactive", "📊 Analyse Rapide", "💾 Données Brutes"])
+tab_map, tab_stats, tab_raw = st.tabs(["🗺️ Carte Interactive", "📊 Analyse", "💾 Données Brutes"])
 
 with tab_map:
+    # Initialisation carte
     m = folium.Map(location=ville_conf["coords"], zoom_start=ville_conf["zoom"])
+    coords_heat = []
     
-    coords_for_heat = []
-    
-    # Boucle d'affichage
     for item in data_finale:
         lat, lon = recuperer_gps(item, config_dataset["col_geo"])
         
         if lat and lon:
-            coords_for_heat.append([lat, lon])
+            coords_heat.append([lat, lon])
             
-            # Construction Popup
+            # Popup
             titre = item.get(config_dataset["col_titre"], "Sans titre")
             adresse = item.get(config_dataset["col_adresse"], "")
             
             html = f"<b>{titre}</b><br><i>{adresse}</i><hr>"
             for col in config_dataset["infos_sup"]:
                 val = item.get(col)
-                if val: html += f"<small><b>{col}:</b> {str(val)[:50]}</small><br>"
+                if val: html += f"<span style='font-size:10px'><b>{col}:</b> {str(val)[:40]}...</span><br>"
             
             folium.Marker(
                 [lat, lon],
@@ -319,33 +326,31 @@ with tab_map:
                 icon=folium.Icon(color=config_dataset["couleur"], icon=config_dataset["icone"], prefix="fa")
             ).add_to(m)
             
-    st_folium(m, width="100%", height=600)
+    if coords_heat:
+        st_folium(m, width="100%", height=600)
+    else:
+        st.warning("Aucune coordonnée valide trouvée dans ce jeu de données.")
 
 with tab_stats:
     if len(data_finale) > 0:
         df = pd.DataFrame(data_finale)
         
         col1, col2 = st.columns(2)
-        with col1:
-            st.metric("Nombre de points", len(df))
-        with col2:
-            st.metric("Colonnes disponibles", len(df.columns))
+        with col1: st.metric("Nombre d'éléments", len(df))
+        with col2: st.metric("Nombre de colonnes", len(df.columns))
             
-        # Tentative de graphiques auto sur les champs texte (catégoriels)
-        colonnes_cat = [c for c in df.columns if df[c].dtype == 'object' and df[c].nunique() < 20]
-        
-        if colonnes_cat:
-            st.subheader("Répartition automatique")
-            col_graph = st.selectbox("Analyser la colonne :", colonnes_cat)
-            
+        # Graphique automatique sur les champs texte courts
+        cat_cols = [c for c in df.columns if df[c].dtype == 'object' and df[c].nunique() < 15]
+        if cat_cols:
+            c_g = st.selectbox("Répartition par :", cat_cols)
             chart = alt.Chart(df).mark_bar().encode(
-                x=alt.X(col_graph, sort='-y'),
+                x=alt.X(c_g, sort='-y'),
                 y='count()',
-                color=col_graph
+                color=c_g
             ).interactive()
             st.altair_chart(chart, use_container_width=True)
         else:
-            st.info("Pas de colonnes catégorielles simples trouvées pour un graphique auto.")
+            st.info("Pas de statistiques évidentes à afficher.")
 
 with tab_raw:
     st.dataframe(data_finale)
