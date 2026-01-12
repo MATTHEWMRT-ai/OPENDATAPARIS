@@ -9,7 +9,6 @@ import time
 import pandas as pd
 import re
 import altair as alt
-import math
 
 # ==========================================
 # 0. CONFIGURATION PAGE
@@ -33,36 +32,23 @@ CONFIG_VILLES = {
         "cp_prefix": "75",
         "alias": ["paris", "paname", "75"],
         "categories": {
-            # --- DONNÉES IDÉALES POUR CORRÉLATION (DEMO) ---
-            "👶 Crèches (Municipales)": {
-                "api_id": "creches-municipales-et-subventionnees",
-                "col_titre": "nom_equipement", "col_adresse": "adresse",
-                "icone": "user", "couleur": "purple",
-                "infos_sup": [("telephone", "📞 Tél")],
-                "mots_cles": ["bebe", "creche", "enfant", "garderie"]
-            },
-            "🎓 Écoles Maternelles": {
-                "api_id": "etablissements-scolaires-maternelles",
+            # --- DUO GAGNANT POUR LA CORRÉLATION ---
+            "🚽 Sanisettes (Toilettes)": {
+                "api_id": "sanisettesparis",
                 "col_titre": "libelle", "col_adresse": "adresse",
-                "icone": "child", "couleur": "pink", 
-                "infos_sup": [("public_prive", "🏫 Secteur")],
-                "mots_cles": ["ecole", "maternelle", "enfant"]
+                "icone": "tint", "couleur": "blue", 
+                "infos_sup": [("horaire", "🕒 Horaires"), ("acces_pmr", "♿ PMR")],
+                "mots_cles": ["toilettes", "wc", "pipi"]
             },
-            "🌳 Espaces Verts (Parcs)": {
-                "api_id": "espaces_verts",
-                "col_titre": "nom_ev", "col_adresse": "adresse_numero",
-                "icone": "tree", "couleur": "green",
-                "infos_sup": [("categorie", "🏷️ Type"), ("surface_totale_reelle", "📏 m²")],
-                "mots_cles": ["parc", "jardin", "promenade", "nature"]
+            "⛲️ Fontaines à boire": {
+                "api_id": "fontaines-a-boire",
+                "col_titre": "voie", "col_adresse": "commune",
+                "icone": "glass", "couleur": "cadetblue", 
+                "infos_sup": [("dispo", "💧 Dispo"), ("type_objet", "⚙️ Type")],
+                "mots_cles": ["eau", "boire", "fontaine"]
             },
-             "🌻 Jardins Partagés": {
-                "api_id": "jardins-partages",
-                "col_titre": "nom_ev", "col_adresse": "adresse_numero",
-                "icone": "leaf", "couleur": "lightgreen",
-                "infos_sup": [("structure_porteuse", "👥 Asso")],
-                "mots_cles": ["jardin", "potager", "fleur"]
-            },
-            # --- DONNÉES CLASSIQUES ---
+            
+            # --- AUTRES DONNÉES ---
             "📅 Sorties & Événements": {
                 "api_id": "que-faire-a-paris-",
                 "col_titre": "title", "col_adresse": "address_name",
@@ -71,13 +57,6 @@ CONFIG_VILLES = {
                 "image_col": "cover_url",
                 "mots_cles": ["sorties", "evenements", "concert"]
             },
-            "🏫 Collèges": {
-                "api_id": "etablissements-scolaires-colleges",
-                "col_titre": "libelle", "col_adresse": "adresse",
-                "icone": "graduation-cap", "couleur": "darkblue", 
-                "infos_sup": [("public_prive", "🏫 Secteur")],
-                "mots_cles": ["college", "education"]
-            },
             "🛜 Bornes Wi-Fi": {
                 "api_id": "sites-disposant-du-service-paris-wi-fi",
                 "col_titre": "nom_site", "col_adresse": "arc_adresse",
@@ -85,12 +64,19 @@ CONFIG_VILLES = {
                 "infos_sup": [("etat2", "✅ État"), ("cp", "📮 CP")],
                 "mots_cles": ["wifi", "internet"]
             },
-            "🚽 Sanisettes": {
-                "api_id": "sanisettesparis",
-                "col_titre": "libelle", "col_adresse": "adresse",
-                "icone": "tint", "couleur": "blue", 
-                "infos_sup": [("horaire", "🕒 Horaires")],
-                "mots_cles": ["toilettes", "wc"]
+            "🏗️ Chantiers Perturbants": {
+                "api_id": "chantiers-perturbants",
+                "col_titre": "objet", "col_adresse": "voie",
+                "icone": "exclamation-triangle", "couleur": "red", 
+                "infos_sup": [("date_fin", "📅 Fin")],
+                "mots_cles": ["travaux", "chantier"]
+            },
+            "🆘 Défibrillateurs": {
+                "api_id": "defibrillateurs",
+                "col_titre": "nom_etabl", "col_adresse": "adr_post",
+                "icone": "heartbeat", "couleur": "darkred", 
+                "infos_sup": [("acces_daw", "🚪 Accès")],
+                "mots_cles": ["coeur", "defibrillateur", "urgence"]
             },
             "📉 Qualité de l'Air (Courbes)": {
                 "api_id": "custom_meteo",
@@ -303,7 +289,7 @@ def jouer_son_automatique(texte):
     except:
         pass
 
-# CACHE ACTIF (2 HEURES)
+# CACHE ACTIF (2 HEURES) POUR EVITER DE TROP APPELER L'API
 @st.cache_data(ttl=7200, show_spinner=False) 
 def charger_donnees(base_url, api_id, cible=500):
     headers = {'User-Agent': 'Mozilla/5.0'}
@@ -728,7 +714,6 @@ with st.expander("Créer une analyse croisée", expanded=True):
                     lat, lon = recuperer_coordonnees(item)
                     if lat and lon:
                         # On arrondit à 2 décimales (~1.1km de précision)
-                        # Pour affiner, passer à 3 décimales
                         grid_lat = round(lat, 2) 
                         grid_lon = round(lon, 2)
                         return f"Zone GPS {grid_lat}/{grid_lon}"
