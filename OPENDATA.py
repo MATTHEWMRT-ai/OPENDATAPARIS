@@ -288,25 +288,48 @@ def convert_time_to_float(time_str):
         return None
 
 def recuperer_coordonnees(site):
-    """ Détective de coordonnées """
+    """ 
+    Détective de coordonnées V3 (Spécial geom_x_y) 
+    Gère les formats {lat:..., lon:...}, {y:..., x:...}, ou [lat, lon]
+    """
+    
+    # 1. PRIORITÉ : Vérifier le champ 'geom_x_y' qui pose problème
+    if "geom_x_y" in site:
+        val = site["geom_x_y"]
+        
+        # Si c'est un dictionnaire (ex: {'lat': 48.8, 'lon': 2.3} OU {'y': 48.8, 'x': 2.3})
+        if isinstance(val, dict):
+            # On cherche la Latitude (souvent 'lat', 'latitude' ou 'y')
+            lat = val.get('lat') or val.get('latitude') or val.get('y')
+            # On cherche la Longitude (souvent 'lon', 'longitude' ou 'x')
+            lon = val.get('lon') or val.get('longitude') or val.get('x')
+            
+            if lat is not None and lon is not None:
+                return float(lat), float(lon)
+
+        # Si c'est une liste (ex: [48.85, 2.35])
+        if isinstance(val, list) and len(val) == 2:
+            return float(val[0]), float(val[1])
+
+    # 2. Cas classiques (si geom_x_y n'existe pas ou est vide)
     if "location" in site:
         loc = site["location"]
-        if isinstance(loc, dict): 
-            return loc.get("lat"), loc.get("lon")
-
+        if isinstance(loc, dict): return loc.get("lat"), loc.get("lon")
+    
     if "latitude" in site and "longitude" in site:
-        try:
-            return float(site["latitude"]), float(site["longitude"])
+        try: return float(site["latitude"]), float(site["longitude"])
         except: pass
         
     if "lat_lon" in site:
         ll = site["lat_lon"]
         if isinstance(ll, dict): return ll.get("lat"), ll.get("lon")
+        
     if "geo" in site:
         g = site["geo"]
         if isinstance(g, dict): return g.get("lat"), g.get("lon")
         
-    for cle in ["geolocalisation", "coordonnees", "geo_point_2d"]:
+    # 3. Dernier recours : les autres clés bizarres
+    for cle in ["geolocalisation", "coordonnees", "geo_point_2d", "xy"]:
         val = site.get(cle)
         if val:
             if isinstance(val, dict): return val.get("lat"), val.get("lon")
@@ -317,11 +340,6 @@ def recuperer_coordonnees(site):
                     return float(parts[0].strip()), float(parts[1].strip())
                 except: pass
 
-    geom = site.get("geometry")
-    if geom and isinstance(geom, dict) and geom.get("type") == "Point":
-        coords = geom.get("coordinates")
-        if coords and len(coords) == 2: return coords[1], coords[0] 
-        
     return None, None
 
 def extraire_cp_intelligent(site_data, col_adresse_config, prefixe_cp="75"):
