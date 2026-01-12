@@ -21,7 +21,7 @@ st.set_page_config(
 )
 
 # ==========================================
-# 1. CONFIGURATION DONNÉES
+# 1. CONFIGURATION DONNÉES COMPLÈTE
 # ==========================================
 
 CONFIG_VILLES = {
@@ -32,7 +32,21 @@ CONFIG_VILLES = {
         "cp_prefix": "75",
         "alias": ["paris", "paname", "75"],
         "categories": {
-            # --- DUO GAGNANT POUR LA CORRÉLATION ---
+            "📅 Sorties & Événements": {
+                "api_id": "que-faire-a-paris-",
+                "col_titre": "title", "col_adresse": "address_name",
+                "icone": "calendar", "couleur": "orange",
+                "infos_sup": [("date_start", "📅 Date"), ("price_type", "💶 Prix"), ("lead_text", "ℹ️ Info")],
+                "image_col": "cover_url",
+                "mots_cles": ["sorties", "evenements", "concert", "expo", "culture"]
+            },
+            "🛜 Bornes Wi-Fi": {
+                "api_id": "sites-disposant-du-service-paris-wi-fi",
+                "col_titre": "nom_site", "col_adresse": "arc_adresse",
+                "icone": "wifi", "couleur": "purple", 
+                "infos_sup": [("etat2", "✅ État"), ("cp", "📮 CP")],
+                "mots_cles": ["wifi", "internet", "web"]
+            },
             "🚽 Sanisettes (Toilettes)": {
                 "api_id": "sanisettesparis",
                 "col_titre": "libelle", "col_adresse": "adresse",
@@ -47,29 +61,19 @@ CONFIG_VILLES = {
                 "infos_sup": [("dispo", "💧 Dispo"), ("type_objet", "⚙️ Type")],
                 "mots_cles": ["eau", "boire", "fontaine"]
             },
-            
-            # --- AUTRES DONNÉES ---
-            "📅 Sorties & Événements": {
-                "api_id": "que-faire-a-paris-",
-                "col_titre": "title", "col_adresse": "address_name",
-                "icone": "calendar", "couleur": "orange",
-                "infos_sup": [("date_start", "📅 Date"), ("price_type", "💶 Prix")],
-                "image_col": "cover_url",
-                "mots_cles": ["sorties", "evenements", "concert"]
-            },
-            "🛜 Bornes Wi-Fi": {
-                "api_id": "sites-disposant-du-service-paris-wi-fi",
-                "col_titre": "nom_site", "col_adresse": "arc_adresse",
-                "icone": "wifi", "couleur": "purple", 
-                "infos_sup": [("etat2", "✅ État"), ("cp", "📮 CP")],
-                "mots_cles": ["wifi", "internet"]
-            },
             "🏗️ Chantiers Perturbants": {
                 "api_id": "chantiers-perturbants",
                 "col_titre": "objet", "col_adresse": "voie",
                 "icone": "exclamation-triangle", "couleur": "red", 
-                "infos_sup": [("date_fin", "📅 Fin")],
-                "mots_cles": ["travaux", "chantier"]
+                "infos_sup": [("date_fin", "📅 Fin"), ("impact_circulation", "🚗 Impact")],
+                "mots_cles": ["travaux", "chantier", "route"]
+            },
+            "🔬 Laboratoires d'Analyses": {
+                "api_id": "laboratoires-danalyses-medicales",
+                "col_titre": "laboratoire", "col_adresse": "adresse",
+                "icone": "flask", "couleur": "green", 
+                "infos_sup": [("telephone", "📞 Tél"), ("horaires", "🕒 Horaires")],
+                "mots_cles": ["sante", "medecin", "laboratoire","MST"]
             },
             "🆘 Défibrillateurs": {
                 "api_id": "defibrillateurs",
@@ -78,11 +82,26 @@ CONFIG_VILLES = {
                 "infos_sup": [("acces_daw", "🚪 Accès")],
                 "mots_cles": ["coeur", "defibrillateur", "urgence"]
             },
+            "🏫 Collèges": {
+                "api_id": "etablissements-scolaires-colleges",
+                "col_titre": "libelle", "col_adresse": "adresse",
+                "icone": "graduation-cap", "couleur": "darkblue", 
+                "infos_sup": [("public_prive", "🏫 Secteur")],
+                "mots_cles": ["college", "education"]
+            },
+            "🎓 Écoles Maternelles": {
+                "api_id": "etablissements-scolaires-maternelles",
+                "col_titre": "libelle", "col_adresse": "adresse",
+                "icone": "child", "couleur": "pink", 
+                "infos_sup": [("public_prive", "🏫 Secteur")],
+                "mots_cles": ["ecole", "maternelle", "enfant"]
+            },
             "📉 Qualité de l'Air (Courbes)": {
                 "api_id": "custom_meteo",
                 "col_titre": "", "col_adresse": "",
-                "icone": "area-chart", "couleur": "gray", "infos_sup": [],
-                "mots_cles": ["pollution", "meteo"]
+                "icone": "area-chart", "couleur": "gray",
+                "infos_sup": [],
+                "mots_cles": ["pollution", "air", "courbe", "graphique", "meteo"]
             }
         }
     },
@@ -101,39 +120,45 @@ CONFIG_VILLES = {
                 "infos_sup": [("status", "✅ État"), ("free", "🟢 Places Libres"), ("max", "🔢 Total")],
                 "mots_cles": ["parking", "garer", "voiture", "stationnement"]
             },
-            "🚲 Stations Vélo Star": {
+            "🚲 Stations Vélo Star (Temps réel)": {
                 "api_id": "etat-des-stations-le-velo-star-en-temps-reel",
-                "col_titre": "nom", "col_adresse": "nom", 
+                "col_titre": "nom", 
+                "col_adresse": "nom", 
                 "icone": "bicycle", "couleur": "red",
-                "infos_sup": [("nombrevelosdisponibles", "🚲 Vélos dispo")],
+                "infos_sup": [("nombrevelosdisponibles", "🚲 Vélos dispo"), ("nombreemplacementsdisponibles", "🅿️ Places dispo")],
                 "mots_cles": ["velo", "bicyclette", "star"]
             },
-            "🚌 Bus en Circulation": {
+             "🚌 Bus en Circulation (Temps réel)": {
                 "api_id": "position-des-bus-en-circulation-sur-le-reseau-star-en-temps-reel",
-                "col_titre": "nomcourtligne", "col_adresse": "destination",
+                "col_titre": "nomcourtligne", 
+                "col_adresse": "destination",
                 "icone": "bus", "couleur": "cadetblue",
-                "infos_sup": [("destination", "🏁 Vers")],
+                "infos_sup": [("destination", "🏁 Vers"), ("ecartsecondes", "⏱️ Écart (sec)")],
                 "mots_cles": ["bus", "transport", "star"]
             },
             "🚽 Toilettes Publiques": {
                 "api_id": "toilettes_publiques_vdr",
-                "col_titre": "nom_toilettes", "col_adresse": "voie",
+                "col_titre": "nom_toilettes", 
+                "col_adresse": "voie",
                 "icone": "tint", "couleur": "green",
-                "infos_sup": [("quartier", "📍 Quartier")],
+                "infos_sup": [("quartier", "📍 Quartier"), ("acces_pmr", "♿ PMR")],
                 "mots_cles": ["toilettes", "wc", "pipi"]
             },
-            "📊 Fréquentation Lignes": {
+            "📊 Fréquentation Lignes (Stats uniquement)": {
                 "api_id": "mkt-frequentation-niveau-freq-max-ligne",
-                "col_titre": "ligne", "col_adresse": "tranche_horaire", 
+                "col_titre": "ligne",
+                "col_adresse": "tranche_horaire", 
                 "icone": "bar-chart", "couleur": "gray",
-                "infos_sup": [("frequentation", "👥 Charge")],
+                "infos_sup": [("frequentation", "👥 Charge"), ("tranche_horaire", "🕒 Heure")],
                 "no_map": True,
-                "mots_cles": ["stats", "frequentation", "charge"]
+                "mots_cles": ["stats", "frequentation", "monde", "charge"]
             },
             "📉 Qualité de l'Air (Courbes)": {
-                "api_id": "custom_meteo", "col_titre": "", "col_adresse": "",
-                "icone": "area-chart", "couleur": "gray", "infos_sup": [],
-                "mots_cles": ["pollution", "meteo"]
+                "api_id": "custom_meteo",
+                "col_titre": "", "col_adresse": "",
+                "icone": "area-chart", "couleur": "gray",
+                "infos_sup": [],
+                "mots_cles": ["pollution", "air", "courbe", "graphique", "meteo"]
             }
         }
     },
@@ -146,44 +171,61 @@ CONFIG_VILLES = {
         "categories": {
             "🎉 Salles à Louer": {
                 "api_id": "244400404_salles-nantes-disponibles-location",
-                "col_titre": "nom_de_la_salle", "col_adresse": "adresse",
+                "col_titre": "nom_de_la_salle", 
+                "col_adresse": "adresse",
                 "icone": "building", "couleur": "orange",
-                "infos_sup": [("capacite_reunion", "👥 Capacité")],
-                "mots_cles": ["salle", "fete", "location"]
+                "infos_sup": [("telephone", "📞 Tél"), ("web", "🌐 Web"), ("capacite_reunion", "👥 Capacité")],
+                "mots_cles": ["salle", "fete", "location", "mariage"]
             },
             "📅 Agenda & Événements": {
                 "api_id": "244400404_agenda-evenements-nantes-metropole_v2",
                 "col_titre": "nom", "col_adresse": "lieu",
                 "icone": "calendar", "couleur": "pink",
-                "infos_sup": [("date", "📅 Date"), ("rubrique", "🏷️ Type")],
+                "infos_sup": [("date", "📅 Date"), ("rubrique", "🏷️ Type"), ("description", "ℹ️ Info")],
                 "image_col": "media_1",
-                "mots_cles": ["sortie", "evenement", "culture"]
+                "mots_cles": ["sortie", "evenement", "culture", "concert"]
             },
             "🏊 Piscines": {
                 "api_id": "244400404_piscines-nantes-metropole",
                 "col_titre": "libelle", "col_adresse": "adresse",
                 "icone": "swimmer", "couleur": "blue",
-                "infos_sup": [("telephone", "📞 Tél")],
-                "mots_cles": ["piscine", "nage", "sport"]
+                "infos_sup": [("telephone", "📞 Tél"), ("horaires_periode_scolaire", "🕒 Horaires")],
+                "mots_cles": ["piscine", "nage", "sport", "eau"]
             },
-            "🚲 Bicloo (Stations)": {
+            "🚲 Bicloo (Stations Vélos)": {
                 "api_id": "244400404_stations-velos-libre-service-nantes-metropole",
                 "col_titre": "nom", "col_adresse": "adresse",
                 "icone": "bicycle", "couleur": "red",
-                "infos_sup": [("bike_stands", "🅿️ Bornes")],
-                "mots_cles": ["velo", "bicloo"]
+                "infos_sup": [("status", "✅ État"), ("bike_stands", "🅿️ Bornes")],
+                "mots_cles": ["velo", "bicloo", "cyclisme", "transport"]
             },
-            "🅿️ Parcs Relais": {
+            "❤️ Défibrillateurs": {
+                "api_id": "244400404_defibrillateurs-nantes",
+                "col_titre": "nom_site", "col_adresse": "adresse",
+                "icone": "heartbeat", "couleur": "green",
+                "infos_sup": [("acces", "🚪 Accès"), ("emplacement", "📍 Emplacement")],
+                "mots_cles": ["sante", "urgence", "coeur", "secours","défibrilateur"]
+            },
+            "🅿️ Parcs Relais (Dispo)": {
                 "api_id": "244400404_parcs-relais-nantes-metropole-disponibilites",
                 "col_titre": "nom_du_parc", "col_adresse": "adresse",
                 "icone": "parking", "couleur": "purple",
-                "infos_sup": [("grp_disponible", "🟢 Places Dispo")],
-                "mots_cles": ["parking", "voiture", "tan"]
+                "infos_sup": [("grp_disponible", "🟢 Places Dispo"), ("grp_exploitation", "🔢 Total")],
+                "mots_cles": ["parking", "voiture", "tan", "stationnement","garer"]
+            },
+            "🛜 WiFi Public Extérieur": {
+                "api_id": "244400404_wifi-public-exterieur-nantes-metropole",
+                "col_titre": "nom", "col_adresse": "adresse",
+                "icone": "wifi", "couleur": "cadetblue",
+                "infos_sup": [("etat", "✅ État"), ("localisation", "📍 Lieu")],
+                "mots_cles": ["wifi", "internet", "web", "connexion"]
             },
             "📉 Qualité de l'Air (Courbes)": {
-                "api_id": "custom_meteo", "col_titre": "", "col_adresse": "",
-                "icone": "area-chart", "couleur": "gray", "infos_sup": [],
-                "mots_cles": ["pollution", "meteo"]
+                "api_id": "custom_meteo",
+                "col_titre": "", "col_adresse": "",
+                "icone": "area-chart", "couleur": "gray",
+                "infos_sup": [],
+                "mots_cles": ["pollution", "air", "courbe", "graphique", "meteo"]
             }
         }
     }
@@ -197,14 +239,17 @@ URL_LOGO = "logo_pulse.png"
 # ==========================================
 
 def moteur_recherche(requete, config):
+    """ Recherche Ville + Catégorie (ex: 'Wifi Paris') """
     requete = requete.lower().strip()
     ville_trouvee = None
     cat_trouvee = None
+
     for ville_nom, ville_data in config.items():
         mots_ville = [ville_nom.lower().split()[0]] + ville_data.get("alias", [])
         if any(mot in requete for mot in mots_ville):
             ville_trouvee = ville_nom
             break
+    
     if ville_trouvee:
         categories = config[ville_trouvee]["categories"]
         for cat_nom, cat_data in categories.items():
@@ -229,16 +274,21 @@ def recuperer_coordonnees(site):
     """ Détective de coordonnées """
     if "location" in site:
         loc = site["location"]
-        if isinstance(loc, dict): return loc.get("lat"), loc.get("lon")
+        if isinstance(loc, dict): 
+            return loc.get("lat"), loc.get("lon")
+
     if "latitude" in site and "longitude" in site:
-        try: return float(site["latitude"]), float(site["longitude"])
+        try:
+            return float(site["latitude"]), float(site["longitude"])
         except: pass
+        
     if "lat_lon" in site:
         ll = site["lat_lon"]
         if isinstance(ll, dict): return ll.get("lat"), ll.get("lon")
     if "geo" in site:
         g = site["geo"]
         if isinstance(g, dict): return g.get("lat"), g.get("lon")
+        
     for cle in ["geolocalisation", "coordonnees", "geo_point_2d"]:
         val = site.get(cle)
         if val:
@@ -249,10 +299,12 @@ def recuperer_coordonnees(site):
                     parts = val.split(",")
                     return float(parts[0].strip()), float(parts[1].strip())
                 except: pass
+
     geom = site.get("geometry")
     if geom and isinstance(geom, dict) and geom.get("type") == "Point":
         coords = geom.get("coordinates")
         if coords and len(coords) == 2: return coords[1], coords[0] 
+        
     return None, None
 
 def extraire_cp_intelligent(site_data, col_adresse_config, prefixe_cp="75"):
@@ -289,7 +341,7 @@ def jouer_son_automatique(texte):
     except:
         pass
 
-# CACHE ACTIF (2 HEURES) POUR EVITER DE TROP APPELER L'API
+# CACHE ACTIF (2 HEURES)
 @st.cache_data(ttl=7200, show_spinner=False) 
 def charger_donnees(base_url, api_id, cible=500):
     headers = {'User-Agent': 'Mozilla/5.0'}
