@@ -32,7 +32,7 @@ CONFIG_VILLES = {
         "cp_prefix": "75",
         "alias": ["paris", "paname", "75"],
         "categories": {
-            # --- DONNÉES DE DÉMO CORRÉLATION (Hygiène / Flux) ---
+            # --- DUO GAGNANT (HYGIÈNE & EAU) ---
             "🚽 Sanisettes (Toilettes)": {
                 "api_id": "sanisettesparis",
                 "col_titre": "libelle", "col_adresse": "adresse",
@@ -47,7 +47,7 @@ CONFIG_VILLES = {
                 "infos_sup": [("dispo", "💧 Dispo"), ("type_objet", "⚙️ Type")],
                 "mots_cles": ["eau", "boire", "fontaine"]
             },
-            # --- AUTRES DONNÉES ---
+            # --- DUO FAMILLE ---
             "👶 Crèches (Municipales)": {
                 "api_id": "creches-municipales-et-subventionnees",
                 "col_titre": "nom_equipement", "col_adresse": "adresse",
@@ -69,6 +69,7 @@ CONFIG_VILLES = {
                 "infos_sup": [("categorie", "🏷️ Type"), ("surface_totale_reelle", "📏 m²")],
                 "mots_cles": ["parc", "jardin", "promenade", "nature"]
             },
+            # --- AUTRES ---
             "📅 Sorties & Événements": {
                 "api_id": "que-faire-a-paris-",
                 "col_titre": "title", "col_adresse": "address_name",
@@ -185,7 +186,22 @@ CONFIG_VILLES = {
         "cp_prefix": "44",
         "alias": ["nantes", "naoned", "44"],
         "categories": {
-            # --- NOUVELLE CORRÉLATION (NATURE & FRAICHEUR) ---
+            # --- CORRÉLATION FONCTIONNELLE (NATURE & HYGIÈNE) ---
+            "🌳 Parcs et Jardins": {
+                "api_id": "244400404_parcs-jardins-nantes",
+                "col_titre": "nom_complet", "col_adresse": "adresse",
+                "icone": "tree", "couleur": "green",
+                "infos_sup": [("type", "🏷️ Type"), ("jeux_enfants", "🛝 Jeux")],
+                "mots_cles": ["parc", "jardin", "nature", "promenade"]
+            },
+            "🚽 Toilettes Publiques": {
+                "api_id": "244400404_toilettes-publiques-nantes-metropole",
+                "col_titre": "nom", "col_adresse": "adresse",
+                "icone": "tint", "couleur": "blue",
+                "infos_sup": [("acces_pmr", "♿ PMR"), ("commune", "📍 Ville")],
+                "mots_cles": ["wc", "toilettes", "hygiene"]
+            },
+            # --- DONNÉES CLASSIQUES ---
             "❄️ Îlots de Fraîcheur": {
                 "api_id": "244400404_ilot-fraicheur-nantes-metropole",
                 "col_titre": "nom", "col_adresse": "commune",
@@ -193,15 +209,6 @@ CONFIG_VILLES = {
                 "infos_sup": [("categorie", "🏷️ Categorie"), ("commune", "📍 Ville")],
                 "mots_cles": ["frais", "canicule", "climat", "nature"]
             },
-            "🏗️ Occupation du Sol (Niveau 3)": {
-                "api_id": "244400404_occupation-sol-2022-niveau-3-nantes-metropole",
-                "col_titre": "libelle", "col_adresse": "commune",
-                "icone": "layer-group", "couleur": "green",
-                "infos_sup": [("code", "🔢 Code"), ("libelle", "🏷️ Type")],
-                "mots_cles": ["sol", "terrain", "nature", "urbanisme"]
-            },
-            
-            # --- DONNÉES CLASSIQUES ---
             "🎉 Salles à Louer": {
                 "api_id": "244400404_salles-nantes-disponibles-location",
                 "col_titre": "nom_de_la_salle", 
@@ -264,7 +271,8 @@ CONFIG_VILLES = {
     }
 }
 
-COLONNES_CP_A_SCANNER = ["cp", "code_postal", "code_post", "zipcode", "commune", "location_address", "cp_arrondissement", "address_zipcode"]
+# AJOUT DE "ARRONDISSEMENT" POUR PARIS
+COLONNES_CP_A_SCANNER = ["cp", "code_postal", "code_post", "zipcode", "commune", "location_address", "cp_arrondissement", "address_zipcode", "arrondissement"]
 URL_LOGO = "logo_pulse.png" 
 
 # ==========================================
@@ -371,23 +379,42 @@ def recuperer_coordonnees(site):
     return None, None
 
 def extraire_cp_intelligent(site_data, col_adresse_config, prefixe_cp="75"):
-    cp_trouve = None
-    regex = rf'{prefixe_cp}\d{{3}}'
+    """
+    Extraction INTELLIGENTE pour Paris (gère 'PARIS 12E', '75012', etc.)
+    """
+    regex_std = rf'{prefixe_cp}\d{{3}}'
+    
+    # 1. Scan des colonnes candidates
     for col in COLONNES_CP_A_SCANNER:
-        val = str(site_data.get(col, ""))
-        match = re.search(regex, val)
+        val = str(site_data.get(col, "")).strip()
+        
+        # A. Cas standard : 75012
+        match = re.search(regex_std, val)
         if match:
-            cp_trouve = match.group(0)
-            break
-    if not cp_trouve:
-        adresse = str(site_data.get(col_adresse_config, ""))
-        match = re.search(regex, adresse)
-        if match:
-            cp_trouve = match.group(0)
-    if cp_trouve:
-        if prefixe_cp == "75" and cp_trouve.startswith("751") and len(cp_trouve) == 5:
-             return f"750{cp_trouve[3:]}"
-        return cp_trouve
+            return match.group(0)
+            
+        # B. Cas Spécial Paris : "PARIS 12E ARRDT" (pour Fontaines)
+        if prefixe_cp == "75" and "paris" in val.lower():
+            match_arr = re.search(r"paris\s*(\d+)", val.lower())
+            if match_arr:
+                num = int(match_arr.group(1))
+                if 1 <= num <= 20:
+                    return f"75{num:03d}" # Transforme 12 en 75012
+
+    # 2. Scan de l'adresse brute
+    adresse = str(site_data.get(col_adresse_config, ""))
+    match = re.search(regex_std, adresse)
+    if match:
+        return match.group(0)
+    
+    # 3. Scan adresse brute pour "Paris Xe"
+    if prefixe_cp == "75" and "paris" in adresse.lower():
+        match_arr = re.search(r"paris\s*(\d+)", adresse.lower())
+        if match_arr:
+            num = int(match_arr.group(1))
+            if 1 <= num <= 20:
+                return f"75{num:03d}"
+
     return "Inconnu"
 
 def jouer_son_automatique(texte):
