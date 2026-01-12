@@ -892,8 +892,8 @@ with st.expander("Créer une analyse croisée", expanded=True):
                     lat, lon = recuperer_coordonnees(item)
                     if lat and lon:
                         # On arrondit à 2 décimales (~1.1km de précision)
-                        grid_lat = round(lat, 2) 
-                        grid_lon = round(lon, 2)
+                        grid_lat = round(lat * 2, 1) / 2
+                        grid_lon = round(lon * 2, 1) / 2
                         return f"Zone GPS {grid_lat}/{grid_lon}"
                     
                     return None
