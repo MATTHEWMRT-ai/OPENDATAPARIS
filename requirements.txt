@@ -1,6 +1,8 @@
 streamlit
-streamlit-folium
-folium
-requests
-gTTS
 pandas
+requests
+folium
+streamlit-folium
+altair
+gTTS
+streamlit-mic-recorder
