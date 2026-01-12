@@ -21,7 +21,7 @@ st.set_page_config(
 )
 
 # ==========================================
-# 1. CONFIGURATION DONNÉES COMPLÈTE
+# 1. CONFIGURATION DONNÉES (HARDCODED)
 # ==========================================
 
 CONFIG_VILLES = {
@@ -96,7 +96,6 @@ CONFIG_VILLES = {
                 "infos_sup": [("public_prive", "🏫 Secteur")],
                 "mots_cles": ["ecole", "maternelle", "enfant"]
             },
-            # --- NOUVELLE CATEGORIE ---
             "📉 Qualité de l'Air (Courbes)": {
                 "api_id": "custom_meteo",
                 "col_titre": "", "col_adresse": "",
@@ -342,7 +341,8 @@ def jouer_son_automatique(texte):
     except:
         pass
 
-@st.cache_data 
+# AJOUT TTL POUR ÉVITER LE NOMBRE DE REQUÊTES EXCESSIF
+@st.cache_data(ttl=7200) 
 def charger_donnees(base_url, api_id, cible=500):
     headers = {'User-Agent': 'Mozilla/5.0'}
     url = f"{base_url}/{api_id}/records"
@@ -362,10 +362,6 @@ def charger_donnees(base_url, api_id, cible=500):
 
 @st.cache_data
 def charger_meteo_pollution(lat, lon):
-    """
-    Récupère l'historique et le prévisionnel pollution/météo
-    Via Open-Meteo (Gratuit, pas de clé API nécessaire)
-    """
     url = "https://air-quality-api.open-meteo.com/v1/air-quality"
     params = {
         "latitude": lat,
@@ -378,12 +374,8 @@ def charger_meteo_pollution(lat, lon):
     try:
         r = requests.get(url, params=params)
         data = r.json()
-        
-        # Transformation en DataFrame
         hourly = data.get("hourly", {})
         df = pd.DataFrame(hourly)
-        
-        # Renommer pour faire joli sur le graph
         mapper = {
             "time": "Heure",
             "pm10": "Particules PM10",
@@ -502,9 +494,8 @@ if cle_unique != st.session_state.dernier_choix:
         jouer_son_automatique(f"Chargement : {ville_actuelle}, {choix_utilisateur}")
     st.session_state.dernier_choix = cle_unique
 
-
 # =========================================================
-# 🔴 BRANCHEMENT A : SI C'EST NOS COURBES (NOUVEAU CODE)
+# BRANCHEMENT A : SI C'EST NOS COURBES 
 # =========================================================
 if config_data.get("api_id") == "custom_meteo":
     st.subheader(f"📉 Évolution de la pollution : {ville_actuelle}")
@@ -514,10 +505,8 @@ if config_data.get("api_id") == "custom_meteo":
         df_meteo = charger_meteo_pollution(lat, lon)
     
     if not df_meteo.empty:
-        # 1. Sélecteur de courbe (Ce que ton prof veut !)
         cols_dispo = [c for c in df_meteo.columns if c != "Heure"]
         
-        # Widget pour choisir les courbes
         choix_courbe = st.multiselect(
             "Choisissez les indicateurs à tracer :", 
             options=cols_dispo, 
@@ -525,30 +514,27 @@ if config_data.get("api_id") == "custom_meteo":
         )
         
         if choix_courbe:
-            # 2. Tracer la courbe avec Altair
-            # On transforme le tableau pour qu'il soit lisible par Altair (format long)
             df_long = df_meteo.melt('Heure', value_vars=choix_courbe, var_name='Indicateur', value_name='Concentration')
             
             chart = alt.Chart(df_long).mark_line(point=True).encode(
-                x=alt.X('Heure:T', title="Temps"), # T pour Time
+                x=alt.X('Heure:T', title="Temps"),
                 y=alt.Y('Concentration:Q', title="Concentration (µg/m³)"),
                 color='Indicateur:N',
                 tooltip=['Heure', 'Indicateur', 'Concentration']
             ).properties(height=450).interactive()
             
             st.altair_chart(chart, use_container_width=True)
-            
-            st.info("💡 Note : Les données incluent l'historique récent (3 jours) et les prévisions pour les 48h à venir.")
+            st.info("💡 Note : Données via Open-Meteo (Historique 3j + Prévisions 48h).")
         else:
-            st.warning("Veuillez sélectionner au moins une donnée à afficher dans le menu ci-dessus.")
+            st.warning("Veuillez sélectionner au moins une donnée à afficher.")
             
         with st.expander("Voir les données brutes"):
             st.dataframe(df_meteo)
     else:
-        st.error("Impossible de récupérer les données météo pour cette localisation.")
+        st.error("Impossible de récupérer les données météo.")
 
 # =========================================================
-# 🔵 BRANCHEMENT B : LE CODE CLASSIQUE (CARTES / API)
+# BRANCHEMENT B : LE CODE CLASSIQUE (CARTES / API)
 # =========================================================
 else:
     with st.spinner(f"Chargement des données de {ville_actuelle}..."):
@@ -632,7 +618,7 @@ else:
             if coords_heatmap or style_vue == "📍 Points":
                 st_folium(m, width=1000, height=600, returned_objects=[])
             else:
-                st.warning("⚠️ Aucune coordonnée GPS trouvée (Vérifiez les données brutes dans l'onglet Données).")
+                st.warning("⚠️ Aucune coordonnée GPS trouvée.")
 
     with tab_stats:
         st.subheader(f"📊 Analyse : {ville_actuelle}")
@@ -641,27 +627,20 @@ else:
             # --- CAS SPÉCIAL : BUS RENNES (Fréquentation) ---
             if config_data["api_id"] == "mkt-frequentation-niveau-freq-max-ligne":
                 df = pd.DataFrame(resultats_finaux)
-                
-                # 1. Normalisation des colonnes
                 df.columns = [c.lower() for c in df.columns]
                 df = df.loc[:, ~df.columns.duplicated()]
                 
-                # 2. SÉLECTION STRICTE DE LA COLONNE
                 if "frequentation" in df.columns: col_target = "frequentation"
                 elif "niveau_frequentation" in df.columns: col_target = "niveau_frequentation"
                 else: col_target = None
 
                 map_dict = {
-                    "ligne": "ligne",
-                    "tranche_horaire": "tranche_horaire",
-                    "jour_semaine": "jour",
-                    col_target: "frequentation"
+                    "ligne": "ligne", "tranche_horaire": "tranche_horaire",
+                    "jour_semaine": "jour", col_target: "frequentation"
                 }
 
                 if col_target and "ligne" in df.columns and "tranche_horaire" in df.columns:
                     df = df.rename(columns={k:v for k,v in map_dict.items() if k in df.columns})
-
-                    # 3. FILTRE JOUR
                     if 'jour' in df.columns:
                         df['jour'] = df['jour'].fillna("Indéfini")
                         périodes = sorted(df['jour'].unique().astype(str).tolist())
@@ -670,19 +649,15 @@ else:
                             choix_jour = st.selectbox("📅 Choisir le jour à afficher :", périodes, index=idx)
                             df = df[df['jour'] == choix_jour]
 
-                    # 4. NETTOYAGE ET CONVERSION
                     df["frequentation"] = df["frequentation"].fillna("Non ouverte").replace("", "Non ouverte")
-                    
                     def normaliser_freq(val):
                         val = str(val).lower().strip()
                         if "faible" in val: return "Faible"
                         if "moyen" in val: return "Moyenne"
                         if "haute" in val or "forte" in val: return "Forte"
                         return "Non ouverte"
-
                     df["frequentation"] = df["frequentation"].apply(normaliser_freq)
 
-                    # --- LOGIQUE DE TEMPS (GANTT) ---
                     df['heure_debut'] = df['tranche_horaire'].apply(convert_time_to_float)
                     df = df.sort_values(by=['ligne', 'heure_debut'])
                     df['heure_fin'] = df.groupby('ligne')['heure_debut'].shift(-1)
@@ -692,7 +667,6 @@ else:
 
                     if not df_clean.empty:
                         st.write(f"### 🟢 Répartition de la charge ({choix_jour})")
-                        
                         masquer_non_ouvert = st.checkbox("Masquer les périodes 'Non ouverte'", value=True)
                         df_viz = df_clean.copy()
                         if masquer_non_ouvert:
@@ -704,9 +678,7 @@ else:
                         chart = alt.Chart(df_viz).mark_bar().encode(
                             y=alt.Y('ligne', title="Ligne"),
                             x=alt.X('sum(duree)', stack='normalize', axis=alt.Axis(format='%'), title="% Temps Actif"),
-                            color=alt.Color('frequentation:N', 
-                                            scale=alt.Scale(domain=dom, range=rng),
-                                            legend=alt.Legend(title="Charge")),
+                            color=alt.Color('frequentation:N', scale=alt.Scale(domain=dom, range=rng), legend=alt.Legend(title="Charge")),
                             tooltip=['ligne', 'frequentation', alt.Tooltip('sum(duree)', format='.1f', title='Heures')]
                         ).interactive()
                         st.altair_chart(chart, use_container_width=True)
@@ -719,14 +691,13 @@ else:
                             color=alt.Color('frequentation:N', scale=alt.Scale(domain=dom, range=rng)),
                             tooltip=['ligne', 'tranche_horaire', 'frequentation']
                         ).properties(height=max(400, len(df_clean['ligne'].unique())*20)).interactive()
-                        
                         st.altair_chart(heatmap, use_container_width=True)
                     else:
                         st.warning("⚠️ Pas de données horaires valides.")
                 else:
                     st.error("⚠️ Colonnes API Bus introuvables.")
 
-            # --- CAS GÉNÉRAL (Bar chart des Codes Postaux) ---
+            # --- CAS GÉNÉRAL ---
             else:
                 col1, col2 = st.columns(2)
                 with col1: st.metric("Total éléments", len(resultats_finaux))
@@ -749,3 +720,87 @@ else:
 
     with tab_donnees:
         st.dataframe(resultats_finaux)
+
+# ==========================================
+# 4. NOUVELLE SECTION : LABO DE CORRÉLATIONS
+# ==========================================
+st.divider()
+st.header("🧪 Labo de Corrélations (La Cerise)")
+st.markdown("Comparaison de deux données pour trouver des liens par quartier/code postal.")
+
+with st.expander("Créer une analyse croisée (Donnée A vs Donnée B)", expanded=True):
+    col_a, col_b = st.columns(2)
+    
+    # 1. Choix des deux données
+    liste_cats_dispo = list(CONFIG_VILLES[ville_actuelle]["categories"].keys())
+    # On enlève "Meteo" car pas de CP
+    liste_cats_dispo = [c for c in liste_cats_dispo if "Meteo" not in c and "Courbe" not in c]
+    
+    cat_a = col_a.selectbox("Axe X (Donnée A)", liste_cats_dispo, index=0)
+    
+    # Selectionner un index par défaut différent pour B si possible
+    idx_b = 1 if len(liste_cats_dispo) > 1 else 0
+    cat_b = col_b.selectbox("Axe Y (Donnée B)", liste_cats_dispo, index=idx_b)
+    
+    if st.button("Lancer la corrélation"):
+        if cat_a == cat_b:
+            st.warning("Choisissez deux catégories différentes pour voir une corrélation intéressante.")
+        else:
+            with st.spinner("Analyse croisée en cours..."):
+                # Récupération des deux datasets
+                conf_a = CONFIG_VILLES[ville_actuelle]["categories"][cat_a]
+                conf_b = CONFIG_VILLES[ville_actuelle]["categories"][cat_b]
+                
+                data_a = charger_donnees(CONFIG_VILLES[ville_actuelle]["api_url"], conf_a["api_id"])
+                data_b = charger_donnees(CONFIG_VILLES[ville_actuelle]["api_url"], conf_b["api_id"])
+                
+                # Fonction interne pour compter par CP
+                def compter_par_cp(data, conf, prefix):
+                    cps = []
+                    for item in data:
+                        cp = extraire_cp_intelligent(item, conf.get("col_adresse", ""), prefix)
+                        # On ne garde que les CP valides qui contiennent le préfixe de la ville
+                        if prefix in str(cp) and "Inconnu" not in str(cp): 
+                            cps.append(cp)
+                    return pd.Series(cps).value_counts()
+
+                # Création des séries
+                prefixe_ville = CONFIG_VILLES[ville_actuelle]["cp_prefix"]
+                serie_a = compter_par_cp(data_a, conf_a, prefixe_ville)
+                serie_b = compter_par_cp(data_b, conf_b, prefixe_ville)
+                
+                # Fusion (Join) sur le Code Postal
+                df_corr = pd.concat([serie_a, serie_b], axis=1, keys=['Data_A', 'Data_B']).dropna()
+                df_corr['Code_Postal'] = df_corr.index
+                
+                if not df_corr.empty and len(df_corr) > 2:
+                    st.write(f"### Corrélation calculée sur {len(df_corr)} zones communes")
+                    
+                    col_graph, col_info = st.columns([3, 1])
+                    
+                    with col_graph:
+                        # Graphique de corrélation (Scatter Plot)
+                        chart_corr = alt.Chart(df_corr).mark_circle(size=100).encode(
+                            x=alt.X('Data_A', title=f"Nombre : {cat_a}"),
+                            y=alt.Y('Data_B', title=f"Nombre : {cat_b}"),
+                            color=alt.Color('Code_Postal', legend=None),
+                            tooltip=['Code_Postal', 'Data_A', 'Data_B']
+                        ).interactive()
+                        
+                        st.altair_chart(chart_corr, use_container_width=True)
+                    
+                    with col_info:
+                        # Calcul statistique simple
+                        correlation = df_corr['Data_A'].corr(df_corr['Data_B'])
+                        st.metric("Coeff. Pearson", f"{correlation:.2f}")
+                        
+                        if correlation > 0.6: 
+                            st.success("📈 Forte corrélation !")
+                        elif correlation < -0.6: 
+                            st.warning("📉 Corrélation inversée !")
+                        else: 
+                            st.info("😐 Pas de lien évident.")
+                else:
+                    st.warning("Pas assez de données géographiques communes (Codes Postaux) trouvées pour faire une statistique fiable.")
+                    st.write("Données brutes A (Top 5):", serie_a.head())
+                    st.write("Données brutes B (Top 5):", serie_b.head())
