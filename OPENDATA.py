@@ -32,6 +32,44 @@ CONFIG_VILLES = {
         "cp_prefix": "75",
         "alias": ["paris", "paname", "75"],
         "categories": {
+            # --- DONNÉES DE DÉMO CORRÉLATION (Hygiène / Flux) ---
+            "🚽 Sanisettes (Toilettes)": {
+                "api_id": "sanisettesparis",
+                "col_titre": "libelle", "col_adresse": "adresse",
+                "icone": "tint", "couleur": "blue", 
+                "infos_sup": [("horaire", "🕒 Horaires"), ("acces_pmr", "♿ PMR")],
+                "mots_cles": ["toilettes", "wc", "pipi", "sanisette"]
+            },
+            "⛲️ Fontaines à boire": {
+                "api_id": "fontaines-a-boire",
+                "col_titre": "voie", "col_adresse": "commune",
+                "icone": "glass", "couleur": "cadetblue", 
+                "infos_sup": [("dispo", "💧 Dispo"), ("type_objet", "⚙️ Type")],
+                "mots_cles": ["eau", "boire", "fontaine"]
+            },
+            # --- DONNÉES ENFANCE & NATURE ---
+            "👶 Crèches (Municipales)": {
+                "api_id": "creches-municipales-et-subventionnees",
+                "col_titre": "nom_equipement", "col_adresse": "adresse",
+                "icone": "user", "couleur": "purple",
+                "infos_sup": [("telephone", "📞 Tél")],
+                "mots_cles": ["bebe", "creche", "enfant", "garderie"]
+            },
+            "🎓 Écoles Maternelles": {
+                "api_id": "etablissements-scolaires-maternelles",
+                "col_titre": "libelle", "col_adresse": "adresse",
+                "icone": "child", "couleur": "pink", 
+                "infos_sup": [("public_prive", "🏫 Secteur")],
+                "mots_cles": ["ecole", "maternelle", "enfant"]
+            },
+             "🌳 Espaces Verts (Parcs)": {
+                "api_id": "espaces_verts",
+                "col_titre": "nom_ev", "col_adresse": "adresse_numero",
+                "icone": "tree", "couleur": "green",
+                "infos_sup": [("categorie", "🏷️ Type"), ("surface_totale_reelle", "📏 m²")],
+                "mots_cles": ["parc", "jardin", "promenade", "nature"]
+            },
+            # --- AUTRES DONNÉES ---
             "📅 Sorties & Événements": {
                 "api_id": "que-faire-a-paris-",
                 "col_titre": "title", "col_adresse": "address_name",
@@ -46,20 +84,6 @@ CONFIG_VILLES = {
                 "icone": "wifi", "couleur": "purple", 
                 "infos_sup": [("etat2", "✅ État"), ("cp", "📮 CP")],
                 "mots_cles": ["wifi", "internet", "web"]
-            },
-            "🚽 Sanisettes (Toilettes)": {
-                "api_id": "sanisettesparis",
-                "col_titre": "libelle", "col_adresse": "adresse",
-                "icone": "tint", "couleur": "blue", 
-                "infos_sup": [("horaire", "🕒 Horaires"), ("acces_pmr", "♿ PMR")],
-                "mots_cles": ["toilettes", "wc", "pipi"]
-            },
-            "⛲️ Fontaines à boire": {
-                "api_id": "fontaines-a-boire",
-                "col_titre": "voie", "col_adresse": "commune",
-                "icone": "glass", "couleur": "cadetblue", 
-                "infos_sup": [("dispo", "💧 Dispo"), ("type_objet", "⚙️ Type")],
-                "mots_cles": ["eau", "boire", "fontaine"]
             },
             "🏗️ Chantiers Perturbants": {
                 "api_id": "chantiers-perturbants",
@@ -88,13 +112,6 @@ CONFIG_VILLES = {
                 "icone": "graduation-cap", "couleur": "darkblue", 
                 "infos_sup": [("public_prive", "🏫 Secteur")],
                 "mots_cles": ["college", "education"]
-            },
-            "🎓 Écoles Maternelles": {
-                "api_id": "etablissements-scolaires-maternelles",
-                "col_titre": "libelle", "col_adresse": "adresse",
-                "icone": "child", "couleur": "pink", 
-                "infos_sup": [("public_prive", "🏫 Secteur")],
-                "mots_cles": ["ecole", "maternelle", "enfant"]
             },
             "📉 Qualité de l'Air (Courbes)": {
                 "api_id": "custom_meteo",
@@ -341,7 +358,7 @@ def jouer_son_automatique(texte):
     except:
         pass
 
-# CACHE ACTIF (2 HEURES)
+# CACHE ACTIF (2 HEURES) POUR EVITER DE TROP APPELER L'API
 @st.cache_data(ttl=7200, show_spinner=False) 
 def charger_donnees(base_url, api_id, cible=500):
     headers = {'User-Agent': 'Mozilla/5.0'}
@@ -423,7 +440,7 @@ with col_titre:
 
 st.divider()
 
-# --- SIDEBAR & LOGIQUE ---
+# --- SIDEBAR & LOGIQUE AVEC LISTES DYNAMIQUES ---
 with st.sidebar:
     try: st.image(URL_LOGO, width=60)
     except: pass
@@ -449,22 +466,55 @@ with st.sidebar:
     st.divider()
     st.header("📍 Destination")
     
+    # 1. Choix de la Ville
     ville_actuelle = st.selectbox("Choisir une ville :", options=list(CONFIG_VILLES.keys()), key="ville_selectionnee")
     config_ville = CONFIG_VILLES[ville_actuelle]
     all_categories = config_ville["categories"]
     
     st.divider()
     
-    if st.session_state.cat_selectionnee not in all_categories:
-        st.session_state.cat_selectionnee = list(all_categories.keys())[0]
+    # --- LOGIQUE DE LISTES DYNAMIQUES (THEME -> DONNEE) ---
+    # On définit des mots-clés pour grouper les catégories automatiquement
+    THEMES = {
+        "🚍 Transport": ["parking", "vélo", "bus", "bicloo", "parcs relais", "métro"],
+        "🌿 Nature & Air": ["vert", "jardin", "air", "pollution", "parc"],
+        "🎭 Culture & Sorties": ["sortie", "événement", "agenda", "salle", "piscine"],
+        "⚕️ Santé & Sécurité": ["défibrillateur", "laboratoire", "secours", "urgence"],
+        "🚸 Éducation & Enfance": ["école", "collège", "crèche", "maternelle"],
+        "🛠️ Services & Vie Pratique": ["wifi", "toilette", "sanisette", "fontaine", "chantier"]
+    }
 
-    liste_cats = list(all_categories.keys())
-    try:
-        index_cat = liste_cats.index(st.session_state.cat_selectionnee)
-    except ValueError:
-        index_cat = 0
+    # Fonction pour trouver le thème d'une catégorie
+    def trouver_theme(nom_cat):
+        nom_clean = nom_cat.lower()
+        for theme, mots_cles in THEMES.items():
+            if any(mot in nom_clean for mot in mots_cles):
+                return theme
+        return "📂 Autres" # Si ça rentre nulle part
+
+    # Création du dictionnaire {Theme: [Liste des catégories]}
+    cats_par_theme = {}
+    for cat in all_categories.keys():
+        th = trouver_theme(cat)
+        if th not in cats_par_theme: cats_par_theme[th] = []
+        cats_par_theme[th].append(cat)
+    
+    # Sélecteur 1 : Le Thème
+    # On trie les thèmes pour que ce soit propre
+    liste_themes = sorted(list(cats_par_theme.keys()))
+    theme_selectionne = st.selectbox("1️⃣ Filtrer par Thème :", liste_themes)
+    
+    # Sélecteur 2 : La Donnée (Filtrée par le thème !)
+    liste_cats_filtree = cats_par_theme[theme_selectionne]
+    
+    # On gère le cas où la sélection précédente n'est plus dans la liste filtrée
+    index_par_defaut = 0
+    if st.session_state.cat_selectionnee in liste_cats_filtree:
+        index_par_defaut = liste_cats_filtree.index(st.session_state.cat_selectionnee)
         
-    choix_utilisateur_brut = st.selectbox("Choisir une donnée :", options=liste_cats, index=index_cat)
+    choix_utilisateur_brut = st.selectbox("2️⃣ Choisir la donnée :", options=liste_cats_filtree, index=index_par_defaut)
+    
+    # Mise à jour de la session
     st.session_state.cat_selectionnee = choix_utilisateur_brut
     
     st.divider()
