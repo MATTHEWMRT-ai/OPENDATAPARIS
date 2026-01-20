@@ -44,7 +44,7 @@ CONFIG_VILLES = {
             "⛲️ Fontaines à boire": {
                 "api_id": "fontaines-a-boire",
                 "col_titre": "voie", "col_adresse": "commune",
-                "icone": "glass", "couleur": "cadetblue", 
+                "icone": "tint", "couleur": "cadetblue", 
                 "infos_sup": [("dispo", "💧 Dispo"), ("type_objet", "⚙️ Type")],
                 "mots_cles": ["eau", "boire", "fontaine"]
             },
@@ -968,7 +968,7 @@ else:
 # 4. SECTION : LABO DE CORRÉLATIONS (V2)
 # ==========================================
 st.divider()
-st.header("🧪 Labo de Corrélations (La Cerise)")
+st.header("🧪 Labo de Corrélations")
 st.markdown("""
 Recherche de liens entre deux données. 
 * **Paris** : Regroupement par Arrondissement (CP).
