@@ -1,7 +1,7 @@
 import streamlit as st
 from streamlit_folium import st_folium
 import folium
-from folium.plugins import HeatMap
+from folium.plugins import HeatMap, MarkerCluster # AJOUT DU CLUSTERING
 import requests
 from gtts import gTTS
 import base64
@@ -33,7 +33,6 @@ CONFIG_VILLES = {
         "cp_prefix": "75",
         "alias": ["paris", "paname", "75"],
         "categories": {
-            # --- DUO GAGNANT (HYGIÈNE & EAU) ---
             "🚽 Sanisettes (Toilettes)": {
                 "api_id": "sanisettesparis",
                 "col_titre": "libelle", "col_adresse": "adresse",
@@ -44,11 +43,17 @@ CONFIG_VILLES = {
             "⛲️ Fontaines à boire": {
                 "api_id": "fontaines-a-boire",
                 "col_titre": "voie", "col_adresse": "commune",
-                "icone": "tint", "couleur": "cadetblue", 
+                "icone": "glass", "couleur": "cadetblue", 
                 "infos_sup": [("dispo", "💧 Dispo"), ("type_objet", "⚙️ Type")],
                 "mots_cles": ["eau", "boire", "fontaine"]
             },
-            # --- DUO FAMILLE ---
+            "👶 Crèches (Municipales)": {
+                "api_id": "creches-municipales-et-subventionnees",
+                "col_titre": "nom_equipement", "col_adresse": "adresse",
+                "icone": "user", "couleur": "purple",
+                "infos_sup": [("telephone", "📞 Tél")],
+                "mots_cles": ["bebe", "creche", "enfant", "garderie"]
+            },
             "🎓 Écoles Maternelles": {
                 "api_id": "etablissements-scolaires-maternelles",
                 "col_titre": "libelle", "col_adresse": "adresse",
@@ -63,7 +68,6 @@ CONFIG_VILLES = {
                 "infos_sup": [("categorie", "🏷️ Type"), ("surface_totale_reelle", "📏 m²")],
                 "mots_cles": ["parc", "jardin", "promenade", "nature"]
             },
-            # --- AUTRES ---
             "📅 Sorties & Événements": {
                 "api_id": "que-faire-a-paris-",
                 "col_titre": "title", "col_adresse": "address_name",
@@ -180,7 +184,6 @@ CONFIG_VILLES = {
         "cp_prefix": "44",
         "alias": ["nantes", "naoned", "44"],
         "categories": {
-            # --- CORRÉLATION FONCTIONNELLE (NATURE & HYGIÈNE) ---
             "🌳 Parcs et Jardins": {
                 "api_id": "244400404_parcs-jardins-nantes",
                 "col_titre": "nom_complet", "col_adresse": "adresse",
@@ -195,7 +198,6 @@ CONFIG_VILLES = {
                 "infos_sup": [("acces_pmr", "♿ PMR"), ("commune", "📍 Ville")],
                 "mots_cles": ["wc", "toilettes", "hygiene"]
             },
-            # --- DONNÉES CLASSIQUES ---
             "❄️ Îlots de Fraîcheur": {
                 "api_id": "244400404_ilot-fraicheur-nantes-metropole",
                 "col_titre": "nom", "col_adresse": "commune",
@@ -472,6 +474,19 @@ def charger_meteo_pollution(lat, lon):
     except Exception as e:
         return pd.DataFrame()
 
+# Fonction simple pour météo temps réel (Widget Sidebar)
+def get_current_weather(lat, lon):
+    url = "https://api.open-meteo.com/v1/forecast"
+    params = {
+        "latitude": lat,
+        "longitude": lon,
+        "current_weather": "true"
+    }
+    try:
+        r = requests.get(url, params=params)
+        return r.json().get("current_weather", {})
+    except: return None
+
 # ==========================================
 # 3. INTERFACE STREAMLIT
 # ==========================================
@@ -527,7 +542,7 @@ with st.sidebar:
             else:
                 st.error("Je n'ai pas compris (ex: 'Wifi Paris').")
 
-    # --- ZONE DE RECHERCHE AVEC MICRO (CORRIGÉ) ---
+    # --- ZONE DE RECHERCHE AVEC MICRO ---
     col_text, col_mic = st.columns([8, 2])
     with col_mic:
         text_vocal = speech_to_text(language='fr', start_prompt="🎤 Parler", stop_prompt="🛑 Arrêter", just_once=True, key='STT')
@@ -552,6 +567,12 @@ with st.sidebar:
     ville_actuelle = st.selectbox("Choisir une ville :", options=list(CONFIG_VILLES.keys()), key="ville_selectionnee")
     config_ville = CONFIG_VILLES[ville_actuelle]
     all_categories = config_ville["categories"]
+    
+    # --- WIDGET MÉTÉO (NOUVEAU) ---
+    weather_now = get_current_weather(config_ville["coords_center"][0], config_ville["coords_center"][1])
+    if weather_now:
+        temp = weather_now.get("temperature")
+        st.info(f"⛅ Météo actuelle : **{temp}°C**")
     
     st.divider()
     
@@ -736,6 +757,9 @@ else:
                 tiles=tiles_layer,
                 attr=attr
             )
+            
+            # --- CLUSTERING POUR LA PERF ---
+            marker_cluster = MarkerCluster().add_to(m) if style_vue == "📍 Points" else None
             coords_heatmap = []
             
             for site in resultats_finaux:
@@ -754,7 +778,18 @@ else:
                             if isinstance(url_img, dict): url_img = url_img.get("url")
                             if url_img: html_image = f'<img src="{url_img}" width="200px" style="border-radius:5px; margin-bottom:10px;"><br>'
 
-                        popup_content = f"{html_image}<b>{titre}</b><br><i>{adresse}</i>"
+                        # LIEN GOOGLE MAPS
+                        gmaps_link = f"https://www.google.com/maps/dir/?api=1&destination={lat},{lon}"
+                        
+                        popup_content = f"""
+                        {html_image}
+                        <b>{titre}</b><br>
+                        <i>{adresse}</i><br>
+                        <a href="{gmaps_link}" target="_blank" style="text-decoration:none;">
+                            <button style="margin-top:5px;cursor:pointer;">📍 Y aller</button>
+                        </a>
+                        """
+                        
                         infos_html = ""
                         for k, v in config_data["infos_sup"]:
                             val = site.get(k)
@@ -766,7 +801,7 @@ else:
                         folium.Marker(
                             [lat, lon], popup=folium.Popup(popup_content, max_width=250),
                             icon=folium.Icon(color=config_data["couleur"], icon=config_data["icone"], prefix="fa")
-                        ).add_to(m)
+                        ).add_to(marker_cluster if marker_cluster else m)
 
             if style_vue == "🔥 Densité" and coords_heatmap:
                 HeatMap(coords_heatmap, radius=15).add_to(m)
@@ -894,7 +929,7 @@ else:
 # 4. SECTION : LABO DE CORRÉLATIONS (V2)
 # ==========================================
 st.divider()
-st.header("🧪 Labo de Corrélations")
+st.header("🧪 Labo de Corrélations (La Cerise)")
 st.markdown("""
 Recherche de liens entre deux données. 
 * **Paris** : Regroupement par Arrondissement (CP).
