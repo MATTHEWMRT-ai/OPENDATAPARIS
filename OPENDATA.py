@@ -38,7 +38,7 @@ CONFIG_VILLES = {
                 "api_id": "sanisettesparis",
                 "col_titre": "libelle", "col_adresse": "adresse",
                 "icone": "tint", "couleur": "blue", 
-                "infos_sup": [("horaire", "🕒 Horaires"), ("acces_pmr", "♿ PMR"), ("arrondissement", "📍 Arrdt")],
+                "infos_sup": [("horaire", "🕒 Horaires"), ("acces_pmr", "♿ PMR")],
                 "mots_cles": ["toilettes", "wc", "pipi", "sanisette"]
             },
             "⛲️ Fontaines à boire": {
@@ -52,7 +52,7 @@ CONFIG_VILLES = {
                 "api_id": "creches-municipales-et-subventionnees",
                 "col_titre": "nom_equipement", "col_adresse": "adresse",
                 "icone": "user", "couleur": "purple",
-                "infos_sup": [("telephone", "📞 Tél"), ("capacite", "👶 Places")],
+                "infos_sup": [("telephone", "📞 Tél")],
                 "mots_cles": ["bebe", "creche", "enfant", "garderie"]
             },
             "🎓 Écoles Maternelles": {
@@ -66,14 +66,14 @@ CONFIG_VILLES = {
                 "api_id": "espaces_verts",
                 "col_titre": "nom_ev", "col_adresse": "adresse_numero",
                 "icone": "tree", "couleur": "green",
-                "infos_sup": [("categorie", "🏷️ Type"), ("surface_totale_reelle", "📏 m²"), ("adresse_codepostal", "📮 CP")],
+                "infos_sup": [("categorie", "🏷️ Type"), ("surface_totale_reelle", "📏 m²")],
                 "mots_cles": ["parc", "jardin", "promenade", "nature"]
             },
             "📅 Sorties & Événements": {
                 "api_id": "que-faire-a-paris-",
                 "col_titre": "title", "col_adresse": "address_name",
                 "icone": "calendar", "couleur": "orange",
-                "infos_sup": [("date_start", "📅 Début"), ("price_type", "💶 Prix"), ("lead_text", "ℹ️ Info")],
+                "infos_sup": [("date_start", "📅 Date"), ("price_type", "💶 Prix"), ("lead_text", "ℹ️ Info")],
                 "image_col": "cover_url",
                 "mots_cles": ["sorties", "evenements", "concert", "expo", "culture"]
             },
@@ -133,9 +133,10 @@ CONFIG_VILLES = {
                 "col_titre": "key",
                 "col_adresse": "organname",
                 "icone": "parking", "couleur": "blue",
-                "infos_sup": [("status", "✅ État"), ("free", "🟢 Places Libres"), ("max", "🔢 Capacité Total")],
+                "infos_sup": [("status", "✅ État"), ("free", "🟢 Places Libres"), ("max", "🔢 Total")],
                 "mots_cles": ["parking", "garer", "voiture", "stationnement", "centre", "payant"]
             },
+            # --- CORRECTION DES CHAMPS POUR PARC RELAIS STAR ---
             "🅿️ Parcs Relais (STAR)": {
                 "api_id": "tco-parcsrelais-star-etat-tr",
                 "col_titre": "nom", 
@@ -143,13 +144,14 @@ CONFIG_VILLES = {
                 "icone": "parking", "couleur": "purple",
                 "infos_sup": [
                     ("etat_ouverture", "🚪 État"), 
-                    ("places_disponibles_soliste_ordinaire", "🟢 Places Libres"),
-                    ("capacite_place_soliste_ordinaire", "🔢 Capacité Totale"),
-                    ("places_disponibles_pmr", "♿ Places PMR"),
-                    ("places_disponibles_vehicule_elec", "⚡ Places Élec")
+                    ("places_disponibles_soliste_ordinaire", "🟢 Libres"),
+                    ("capacite_place_soliste_ordinaire", "🔢 Capacité"),
+                    ("places_disponibles_pmr", "♿ Libres PMR"),
+                    ("etat_remplissage", "📊 Remplissage")
                 ],
                 "mots_cles": ["relais", "star", "métro", "p+r", "périphérie"]
             },
+            # ---------------------------------------------------
             "🚲 Stations Vélo Star (Temps réel)": {
                 "api_id": "etat-des-stations-le-velo-star-en-temps-reel",
                 "col_titre": "nom", 
