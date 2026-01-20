@@ -44,7 +44,7 @@ CONFIG_VILLES = {
             "⛲️ Fontaines à boire": {
                 "api_id": "fontaines-a-boire",
                 "col_titre": "voie", "col_adresse": "commune",
-                "icone": "glass", "couleur": "cadetblue", 
+                "icone": "tint", "couleur": "cadetblue", 
                 "infos_sup": [("dispo", "💧 Dispo"), ("type_objet", "⚙️ Type")],
                 "mots_cles": ["eau", "boire", "fontaine"]
             },
