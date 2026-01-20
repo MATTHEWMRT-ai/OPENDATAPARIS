@@ -49,13 +49,6 @@ CONFIG_VILLES = {
                 "mots_cles": ["eau", "boire", "fontaine"]
             },
             # --- DUO FAMILLE ---
-            "👶 Crèches (Municipales)": {
-                "api_id": "creches-municipales-et-subventionnees",
-                "col_titre": "nom_equipement", "col_adresse": "adresse",
-                "icone": "user", "couleur": "purple",
-                "infos_sup": [("telephone", "📞 Tél")],
-                "mots_cles": ["bebe", "creche", "enfant", "garderie"]
-            },
             "🎓 Écoles Maternelles": {
                 "api_id": "etablissements-scolaires-maternelles",
                 "col_titre": "libelle", "col_adresse": "adresse",
